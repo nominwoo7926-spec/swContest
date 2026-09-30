@@ -1,0 +1,6 @@
+Scene: Assets/Factory/Scenes/SmartFactory.unity
+Objects: 3778
+Mesh renderers: 3559
+Runtime user scripts: 0
+Lightmaps: 2
+Errors: 0

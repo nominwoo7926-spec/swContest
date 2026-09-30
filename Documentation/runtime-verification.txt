@@ -1,6 +1,0 @@
-E-stop freezes equipment and conveyor: True
-Approval cannot release E-stop: True
-Reset releases latch: True
-Active audio listeners: 1
-Active cameras: 1
-Imported worker: True

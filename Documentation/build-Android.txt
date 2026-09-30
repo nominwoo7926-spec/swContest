@@ -1,4 +1,0 @@
-Succeeded
-Errors: 1
-Size: 1383589343
-Duration: 00:11:34.0819944
