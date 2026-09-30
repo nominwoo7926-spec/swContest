@@ -1,0 +1,6 @@
+Humanoid: valid
+Worker vertices: 4799
+Tracking providers: 1
+Observer: isolated 1920x1080 texture
+Heat masks: vertex surface weights
+Errors: 0

@@ -1,0 +1,10 @@
+Microsoft Rocketbox Avatar Library
+Model: Construction_Male_05
+Copyright (c) 2020 Microsoft
+License: MIT (see Microsoft-Rocketbox-LICENSE.txt in this folder)
+Source: https://github.com/microsoft/Microsoft-Rocketbox
+Commit: 0943055db6ec570bcef9f2c8b41c9e5467c808f9
+Original path: Assets/Avatars/Professions/Construction_Male_05
+
+This application uses the original model and color textures, adapted into a
+Unity Humanoid rig with a custom surface load visualization material.

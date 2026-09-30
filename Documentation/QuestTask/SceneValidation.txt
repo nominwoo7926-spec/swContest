@@ -1,0 +1,8 @@
+Scene: Assets/Factory/Scenes/SmartFactory_QuestTask.unity
+Task roots: 1
+Queue: 4 FIFO reservations (includes in-transit parts)
+Pool: 12
+Weight variants: 1, 3, 5 kg
+Runtime camera: tracked first person only
+Lightmaps preserved: 2
+Errors: 0

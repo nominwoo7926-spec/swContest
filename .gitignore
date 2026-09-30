@@ -10,3 +10,6 @@
 *.sln
 *.slnx
 *.apk
+
+/.quest-validation/
+/Recordings/

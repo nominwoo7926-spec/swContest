@@ -2,6 +2,13 @@
 
 Unity 6000.3.25f1 / Universal Render Pipeline / 1 Unity unit = 1 metre.
 
+## Quest 2 작업
+`Assets/Factory/Scenes/SmartFactory_QuestTask.unity`를 열면 기존 공장에 컨베이어 집기 작업과 좌우 상대부하 패널이 연결되어 있습니다. 사용 방법과 계산 기준은 [Quest 작업 안내](Documentation/QuestTask/README.md)를 참고하세요. APK는 `Builds/QuestTask/NOVA_FactoryTask.apk`입니다.
+
+사람형 작업자 아바타의 신체 표면 부하 색상과 제3자 촬영 기능도 포함되어 있습니다. `Tools > Smart Factory > Avatar Demo > Open Spectator Window`로 PC 촬영 창을 엽니다. Quest 단독 작업 기록을 헤드셋 없이 재생할 수도 있습니다. [연결·조작·OBS 녹화·아바타 교체 안내](Documentation/Avatar/README.md).
+
+아래 설명은 보존된 정적 전시 장면 `SmartFactory.unity`에 대한 안내입니다.
+
 ## Open
 Open `Assets/Factory/Scenes/SmartFactory.unity`. The saved scene is complete outside Play mode. Select Game view for the fixed presentation camera. There are no gameplay, interaction, UI, worker, agent, measurement, or conveyor animation scripts.
 

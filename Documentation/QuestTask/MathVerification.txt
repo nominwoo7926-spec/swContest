@@ -1,0 +1,12 @@
+PASS 5 kg increases shoulder and wrist versus 1 kg
+PASS Farther reach increases shoulder and arm
+PASS Longer holding increases arm and wrist
+PASS Hand travel increases wrist
+PASS Recent repetition increases arm
+PASS Higher hands increase shoulder
+PASS Head drop and forward displacement increase torso
+PASS Torso is bounded 0 to 100
+PASS Load decays gradually rather than clearing on release
+PASS Color endpoints are green and red
+PASS Midpoint is yellow
+PASS Inactive hand has no new loaded target

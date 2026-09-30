@@ -1,0 +1,1 @@
+PASSED: fresh Play mode starts recorded playback without an XR headset; live simulation disabled.
