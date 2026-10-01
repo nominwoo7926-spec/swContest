@@ -65,10 +65,25 @@ namespace FactoryTask
             if (Simulated) return;
 #endif
             if(hp==null)return;
-            HeadTracked=Focused&&ht.IsPressed();LeftTracked=Focused&&lt.IsPressed();RightTracked=Focused&&rt.IsPressed();
-            if(HeadTracked)head.SetLocalPositionAndRotation(hp.ReadValue<Vector3>(),hr.ReadValue<Quaternion>());
-            if(LeftTracked)leftHand.SetLocalPositionAndRotation(lp.ReadValue<Vector3>(),lr.ReadValue<Quaternion>());
-            if(RightTracked)rightHand.SetLocalPositionAndRotation(rp.ReadValue<Vector3>(),rr.ReadValue<Quaternion>());
+            // On some Quest/OpenXR runtime versions centerEyePosition can remain at zero through
+            // the Input System even though orientation updates correctly. Read the native XR node
+            // pose first so room-scale translation is never lost, and keep actions as a fallback.
+            ReadNodePose(XRNode.Head,head,hp,hr,ht,out bool headTracked);
+            ReadNodePose(XRNode.LeftHand,leftHand,lp,lr,lt,out bool leftTracked);
+            ReadNodePose(XRNode.RightHand,rightHand,rp,rr,rt,out bool rightTracked);
+            HeadTracked=Focused&&headTracked;LeftTracked=Focused&&leftTracked;RightTracked=Focused&&rightTracked;
+        }
+        static void ReadNodePose(XRNode node,Transform target,InputAction positionAction,InputAction rotationAction,InputAction trackedAction,out bool tracked)
+        {
+            var device=InputDevices.GetDeviceAtXRNode(node);
+            Vector3 position=default;Quaternion rotation=default;
+            bool hasPosition=device.isValid&&device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.devicePosition,out position);
+            bool hasRotation=device.isValid&&device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.deviceRotation,out rotation);
+            bool nativeTracked=device.isValid&&device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.isTracked,out bool isTracked)&&isTracked;
+            tracked=nativeTracked||(trackedAction!=null&&trackedAction.IsPressed());
+            if(!hasPosition)position=positionAction.ReadValue<Vector3>();
+            if(!hasRotation)rotation=rotationAction.ReadValue<Quaternion>();
+            if(tracked)target.SetLocalPositionAndRotation(position,rotation);
         }
         public bool Tracked(HandSide side)=>side==HandSide.Left?LeftTracked:RightTracked;
         public Transform Hand(HandSide side)=>side==HandSide.Left?leftHand:rightHand;

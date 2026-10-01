@@ -22,6 +22,6 @@ if ($devices.Count -ne 1) {
 $serial = ($devices[0] -split '\s+')[0]
 & $AdbPath -s $serial install -r $apkPath
 if ($LASTEXITCODE -ne 0) { throw 'APK installation failed.' }
-& $AdbPath -s $serial shell monkey -p com.nova.smartfactory.questtask -c android.intent.category.LAUNCHER 1
+& $AdbPath -s $serial shell monkey -p com.nova.smartfactory -c android.intent.category.LAUNCHER 1
 if ($LASTEXITCODE -ne 0) { throw 'Installed, but application launch failed. Open NOVA Factory Task on the headset.' }
 Write-Output 'Installed and launched NOVA Factory Task. Put on the headset and stand comfortably for calibration.'
