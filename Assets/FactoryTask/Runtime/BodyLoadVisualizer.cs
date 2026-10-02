@@ -11,6 +11,7 @@ namespace FactoryTask
         int previous=-999;
         public void Set(int value,Sprite[] glyphs)
         {
+            if(digits==null||digits.Length<3||glyphs==null||glyphs.Length<10)return;
             value=Mathf.Clamp(value,0,999);if(value==previous)return;previous=value;
             digits[0].enabled=value>=100;digits[1].enabled=value>=10;digits[2].enabled=true;
             digits[0].sprite=glyphs[value/100];digits[1].sprite=glyphs[(value/10)%10];digits[2].sprite=glyphs[value%10];
@@ -26,19 +27,71 @@ namespace FactoryTask
         public NumberReadout weight,average;
         public Sprite[] glyphs;
         public Image calibrationProgress;
+
+        [Header("확장 HUD (선택 — 미연결 시 무시됨)")]
+        public ErgonomicReport report;        // B버튼 홀드 진행률 소스
+        public VRSessionRecorder recorder;    // 세션 시간 소스
+        public Image reportHoldProgress;      // fillAmount 0→1 (B버튼 홀드)
+        public NumberReadout sessionMinutes;  // 세션 분
+        public NumberReadout sessionSeconds;  // 세션 초
+        public NumberReadout completedCount;  // 완료 부품 수
+        // 평균 부하 ≥67 이면 alpha를 sin파로 점멸시킬 오버레이 이미지
+        public Image dangerOverlay;
+
         float nextUpdate;
+        float dangerFlashTick;  // 0.1 s 단위 누적 (sin 입력값)
+
         public static Color ColorFor(float score)
         {
             Color green=new Color(.18f,.85f,.48f),yellow=new Color(1,.8f,.13f),red=new Color(.97f,.23f,.22f);
             float v=Mathf.Clamp(score,0,100);return v<=50?Color.Lerp(green,yellow,v/50):Color.Lerp(yellow,red,(v-50)/50);
         }
+
         void Update()
         {
             if(Time.unscaledTime<nextUpdate)return;nextUpdate=Time.unscaledTime+.1f;
+
+            // ── 기존 HUD ──────────────────────────────────────────────
             calibrationProgress.fillAmount=calibration.IsCalibrated?1:calibration.Progress;
             calibrationProgress.color=calibration.IsCalibrated?ColorFor(0):new Color(.4f,.7f,1);
             for(int i=0;i<7;i++){regions[i].color=ColorFor(estimator.Score(i));regionNumbers[i].Set(Mathf.RoundToInt(estimator.Score(i)),glyphs);}
             weight.Set(Mathf.RoundToInt(task.HeldWeight),glyphs);average.Set(Mathf.RoundToInt(estimator.Average),glyphs);
+
+            // ── 확장 HUD ──────────────────────────────────────────────
+
+            // B버튼 보고서 홀드 진행률
+            if(reportHoldProgress!=null&&report!=null)
+                reportHoldProgress.fillAmount=report.HoldProgress;
+
+            // 세션 경과 시간
+            if(recorder!=null)
+            {
+                int total=Mathf.FloorToInt(recorder.Duration);
+                if(sessionMinutes!=null)sessionMinutes.Set(total/60,glyphs);
+                if(sessionSeconds!=null)sessionSeconds.Set(total%60,glyphs);
+            }
+
+            // 완료 부품 수
+            if(completedCount!=null)completedCount.Set(task.CompletedTotal,glyphs);
+
+            // 위험 부하 경고 점멸 (평균 ≥67 일 때 오버레이 alpha를 sin파로)
+            if(dangerOverlay!=null)
+            {
+                bool danger=estimator.Average>=67f;
+                if(danger)
+                {
+                    dangerFlashTick+=.1f;
+                    dangerOverlay.enabled=true;
+                    Color c=dangerOverlay.color;
+                    c.a=Mathf.Abs(Mathf.Sin(dangerFlashTick*3f))*0.4f;
+                    dangerOverlay.color=c;
+                }
+                else
+                {
+                    dangerOverlay.enabled=false;
+                    dangerFlashTick=0;
+                }
+            }
         }
     }
 }

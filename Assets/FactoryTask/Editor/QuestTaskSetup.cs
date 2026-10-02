@@ -89,6 +89,7 @@ public static class QuestTaskSetup
         tracking.actions=CreateActions();calibration.tracking=tracking;calibration.task=task;
         task.tracking=tracking;task.calibration=calibration;task.queue=queue;task.pool=spawner;task.estimator=estimator;
         estimator.tracking=tracking;estimator.calibration=calibration;estimator.task=task;
+        var report=systems.gameObject.AddComponent<ErgonomicReport>();report.estimator=estimator;report.task=task;report.tracking=tracking;
         controller.queue=queue;controller.spawner=spawner;controller.calibration=calibration;controller.tracking=tracking;
         controller.beltRenderer=production.GetComponentsInChildren<Renderer>().First(r=>r.name=="Upper_Belt");
         // Texture property animation cannot use a statically batched belt renderer.
@@ -151,18 +152,20 @@ public static class QuestTaskSetup
     static InputActionAsset CreateActions()
     {
         string path=Root+"/Input/FactoryQuest.inputactions";
-        if(!File.Exists(path))
+        var existing=AssetDatabase.LoadAssetAtPath<InputActionAsset>(path);
+        // ReportButton이 없으면 파일 재생성
+        if(existing!=null&&existing.FindAction("ReportButton")!=null)return existing;
+        if(File.Exists(path))AssetDatabase.DeleteAsset(path);
+        var asset=ScriptableObject.CreateInstance<InputActionAsset>();var map=new InputActionMap("FactoryQuest");asset.AddActionMap(map);
+        AddAction(map,"HeadPosition","<XRHMD>/centerEyePosition","Vector3");AddAction(map,"HeadRotation","<XRHMD>/centerEyeRotation","Quaternion");AddAction(map,"HeadTracked","<XRHMD>/isTracked","Button");
+        foreach(string side in new[]{"Left","Right"})
         {
-            var asset=ScriptableObject.CreateInstance<InputActionAsset>();var map=new InputActionMap("FactoryQuest");asset.AddActionMap(map);
-            AddAction(map,"HeadPosition","<XRHMD>/centerEyePosition","Vector3");AddAction(map,"HeadRotation","<XRHMD>/centerEyeRotation","Quaternion");AddAction(map,"HeadTracked","<XRHMD>/isTracked","Button");
-            foreach(string side in new[]{"Left","Right"})
-            {
-                string device="<XRController>{"+side+"Hand}";
-                AddAction(map,side+"Position",device+"/devicePosition","Vector3");AddAction(map,side+"Rotation",device+"/deviceRotation","Quaternion");AddAction(map,side+"Tracked",device+"/isTracked","Button");AddAction(map,side+"Grip",device+"/gripPressed","Button");
-            }
-            AddAction(map,"Recalibrate","<XRController>{LeftHand}/secondaryButton","Button");
-            File.WriteAllText(path,asset.ToJson());Object.DestroyImmediate(asset);AssetDatabase.ImportAsset(path);
+            string device="<XRController>{"+side+"Hand}";
+            AddAction(map,side+"Position",device+"/devicePosition","Vector3");AddAction(map,side+"Rotation",device+"/deviceRotation","Quaternion");AddAction(map,side+"Tracked",device+"/isTracked","Button");AddAction(map,side+"Grip",device+"/gripPressed","Button");
         }
+        AddAction(map,"Recalibrate","<XRController>{LeftHand}/secondaryButton","Button");
+        AddAction(map,"ReportButton","<XRController>{RightHand}/secondaryButton","Button");
+        File.WriteAllText(path,asset.ToJson());Object.DestroyImmediate(asset);AssetDatabase.ImportAsset(path);
         return AssetDatabase.LoadAssetAtPath<InputActionAsset>(path);
     }
     static void AddAction(InputActionMap map,string name,string binding,string type){var a=map.AddAction(name,type=="Button"?InputActionType.Button:InputActionType.Value,binding);a.expectedControlType=type;}

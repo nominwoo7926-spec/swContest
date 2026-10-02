@@ -15,11 +15,16 @@ namespace FactoryTask
         // Left shoulder, right shoulder, left arm, right arm, left wrist, right wrist, torso.
         readonly float[] load=new float[7], displayed=new float[7], history=new float[7*8], sum=new float[7];
         readonly float[] leftRepetitions=new float[128],rightRepetitions=new float[128];
-        int leftCount,rightCount,leftCursor,rightCursor,sampleCursor,sampleCount;
+        readonly float[] sessionSum=new float[7];
+        int leftCount,rightCount,leftCursor,rightCursor,sampleCursor,sampleCount,sessionSampleCount;
         float sampleClock;
         public float Score(int index)=>displayed[index];
         public void ApplyRecordedScores(float[] scores){for(int i=0;i<7;i++)displayed[i]=Mathf.Clamp(scores[i],0,100);}
         public float Average {get{float total=0;for(int i=0;i<7;i++)total+=displayed[i];return total/7;}}
+        public float SessionAvgScore(int index)=>sessionSampleCount>0?Mathf.Clamp(sessionSum[index]/sessionSampleCount,0,100):0f;
+        public float SessionAverage{get{float t=0;for(int i=0;i<7;i++)t+=SessionAvgScore(i);return t/7;}}
+        public float SessionSeconds=>sessionSampleCount*0.05f;
+        public void ResetSession(){for(int i=0;i<7;i++)sessionSum[i]=0;sessionSampleCount=0;}
         public static Vector3 Evaluate(LoadInput input)
         {
             if(!input.holding)return Vector3.zero;
@@ -68,6 +73,7 @@ namespace FactoryTask
             sampleClock+=dt;if(sampleClock<.05f)return;sampleClock=0;sampleCount=Mathf.Min(8,sampleCount+1);
             for(int i=0;i<7;i++){int k=i*8+sampleCursor;sum[i]-=history[k];history[k]=load[i];sum[i]+=load[i];displayed[i]=Mathf.Clamp(sum[i]/sampleCount,0,100);}
             sampleCursor=(sampleCursor+1)%8;
+            sessionSampleCount++;for(int i=0;i<7;i++)sessionSum[i]+=displayed[i];
         }
     }
 }

@@ -20,7 +20,8 @@ namespace FactoryTask
         public bool AllTracked => HeadTracked && LeftTracked && RightTracked && Focused;
         public bool ExternalPlayback { get; private set; }
         public bool RecordToggle { get; private set; }
-        InputAction record;
+        public bool ReportButton { get; private set; }
+        InputAction record, reportBtn;
         InputAction hp, hr, ht, lp, lr, lt, lg, rp, rr, rt, rg, reset;
         readonly List<XRInputSubsystem> subsystems = new List<XRInputSubsystem>(2);
         float nextOriginCheck;
@@ -35,6 +36,7 @@ namespace FactoryTask
             lp=actions.FindAction("LeftPosition",true); lr=actions.FindAction("LeftRotation",true); lt=actions.FindAction("LeftTracked",true); lg=actions.FindAction("LeftGrip",true);
             rp=actions.FindAction("RightPosition",true); rr=actions.FindAction("RightRotation",true); rt=actions.FindAction("RightTracked",true); rg=actions.FindAction("RightGrip",true); reset=actions.FindAction("Recalibrate",true);
             record=actions.FindAction("RecordToggle",false);
+            reportBtn=actions.FindAction("ReportButton",false);
         }
         void OnEnable() { actions.Enable(); Application.onBeforeRender += ReadPoses; }
         void OnDisable() { Application.onBeforeRender -= ReadPoses; actions.Disable(); }
@@ -57,6 +59,7 @@ namespace FactoryTask
             }
             ReadPoses(); LeftGrip=lg.IsPressed();RightGrip=rg.IsPressed();Recalibrate=reset.IsPressed();
             RecordToggle=record!=null&&record.IsPressed();
+            ReportButton=reportBtn!=null&&reportBtn.IsPressed();
         }
         void ReadPoses()
         {
@@ -65,10 +68,16 @@ namespace FactoryTask
             if (Simulated) return;
 #endif
             if(hp==null)return;
-            HeadTracked=Focused&&ht.IsPressed();LeftTracked=Focused&&lt.IsPressed();RightTracked=Focused&&rt.IsPressed();
-            if(HeadTracked)head.SetLocalPositionAndRotation(hp.ReadValue<Vector3>(),hr.ReadValue<Quaternion>());
-            if(LeftTracked)leftHand.SetLocalPositionAndRotation(lp.ReadValue<Vector3>(),lr.ReadValue<Quaternion>());
-            if(RightTracked)rightHand.SetLocalPositionAndRotation(rp.ReadValue<Vector3>(),rr.ReadValue<Quaternion>());
+            var headPos=hp.ReadValue<Vector3>();var headRot=hr.ReadValue<Quaternion>();
+            var leftPos=lp.ReadValue<Vector3>();var leftRot=lr.ReadValue<Quaternion>();
+            var rightPos=rp.ReadValue<Vector3>();var rightRot=rr.ReadValue<Quaternion>();
+            // isTracked binding may not fire on all OpenXR runtimes; fall back to rotation data presence
+            HeadTracked=Focused&&(ht.IsPressed()||headRot.w<0.9999f);
+            LeftTracked=Focused&&(lt.IsPressed()||leftRot.w<0.9999f);
+            RightTracked=Focused&&(rt.IsPressed()||rightRot.w<0.9999f);
+            if(HeadTracked)head.SetLocalPositionAndRotation(headPos,headRot);
+            if(LeftTracked)leftHand.SetLocalPositionAndRotation(leftPos,leftRot);
+            if(RightTracked)rightHand.SetLocalPositionAndRotation(rightPos,rightRot);
         }
         public bool Tracked(HandSide side)=>side==HandSide.Left?LeftTracked:RightTracked;
         public Transform Hand(HandSide side)=>side==HandSide.Left?leftHand:rightHand;
@@ -77,7 +86,7 @@ namespace FactoryTask
             ExternalPlayback=true;Focused=true;floorOrigin=true;
             head.SetPositionAndRotation(hp,hq);leftHand.SetPositionAndRotation(lp,lq);rightHand.SetPositionAndRotation(rp,rq);
             HeadTracked=(flags&1)!=0;LeftTracked=(flags&2)!=0;RightTracked=(flags&4)!=0;
-            LeftGrip=(flags&8)!=0;RightGrip=(flags&16)!=0;Recalibrate=false;RecordToggle=false;
+            LeftGrip=(flags&8)!=0;RightGrip=(flags&16)!=0;Recalibrate=false;RecordToggle=false;ReportButton=false;
         }
 #if UNITY_EDITOR
         // Only compiled in the Editor, for automated Play mode verification. No desktop controls ship.

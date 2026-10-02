@@ -24,6 +24,8 @@ namespace FactoryTask
         public float PlaybackSeconds => playbackClock;
         public int FramesWritten { get; private set; }
         public float Duration { get; private set; }
+        // 녹화 중이면 현재 경과 시간, 재생/정지 중이면 파일에서 읽은 Duration 반환
+        public float RecordingDuration => IsRecording ? (Time.unscaledTime - started) : Duration;
         public const int Rate = 30;
         const int Magic = 0x46565232, Version = 1, HeaderBytes = 16;
         BinaryWriter writer;
@@ -78,7 +80,7 @@ namespace FactoryTask
             {
                 Directory.CreateDirectory(SessionDirectory);
                 CurrentPath=path??Path.Combine(SessionDirectory,"Factory_"+DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")+".fvr");
-                pool.Initialize();capacity=pool.Parts.Length;
+                pool.Initialize();capacity=pool.Parts.Length;estimator?.ResetSession();
                 writer=new BinaryWriter(new FileStream(CurrentPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read,65536));
                 writer.Write(Magic);writer.Write(Version);writer.Write(capacity);writer.Write(Rate);
                 FramesWritten=0;LastError=null;started=nextSample=Time.unscaledTime;nextFlush=started+1;return true;
@@ -88,6 +90,7 @@ namespace FactoryTask
         public void StopRecording()
         {
             if(writer==null)return;
+            Duration=Time.unscaledTime-started;
             try{writer.Flush();writer.Dispose();}catch(Exception e){LastError=e.Message;}finally{writer=null;}
         }
         void WriteFrame()

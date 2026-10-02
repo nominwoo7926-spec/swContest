@@ -1,15 +1,38 @@
-/Library/
-/Temp/
-/Obj/
-/Build/
-/Builds/
-/Logs/
-/UserSettings/
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+.utmp/
+*.pidb
+*.suo
+*.user
+*.userprefs
+*.unityproj
+*.booproj
+
+# Visual Studio
 .vs/
 *.csproj
 *.sln
-*.slnx
-*.apk
+ExportedObj/
+*.tmp
 
-/.quest-validation/
-/Recordings/
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Unity crash reports
+sysinfo.txt
+UpgradeLog.htm
+
+# Build artifacts
+*_BurstDebugInformation_DoNotShip/
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+
+# Generated reports (pulled separately via adb)
+Reports/
