@@ -4,6 +4,7 @@ namespace FactoryTask
 {
     public sealed class PartSpawner : MonoBehaviour
     {
+        public enum SupplyMode { Random=-1, OneKg=0, ThreeKg=1, FiveKg=2 }
         public ConveyorPart prefab;
         public PickupQueue queue;
         public Transform spawnPoint;
@@ -12,6 +13,7 @@ namespace FactoryTask
         public ConveyorPart[] Parts { get; private set; }
         public int SpawnedCount { get; private set; }
         public int ReusedCount { get; private set; }
+        public SupplyMode Mode { get; private set; } = SupplyMode.FiveKg;
         bool[] used;
         float countdown;
         public void Initialize()
@@ -31,12 +33,14 @@ namespace FactoryTask
             if (countdown > 0 || queue.Full) return;
             for (int i = 0; i < Parts.Length; i++) if (Parts[i].State == PartState.Pooled)
             {
-                Parts[i].Supply(SpawnedCount % 3, spawnPoint.position, spawnPoint.rotation);
+                int kind=(int)SupplyMode.FiveKg;
+                Parts[i].Supply(kind, spawnPoint.position, spawnPoint.rotation);
                 if (!queue.Enqueue(Parts[i])) { Parts[i].ReturnToPool(); return; }
                 if (used[i]) ReusedCount++; used[i] = true;
                 SpawnedCount++; countdown = intervalSeconds; return;
             }
         }
         public void Recycle(ConveyorPart part) { part.ReturnToPool(); }
+        public void SetMode(SupplyMode mode) { Mode=SupplyMode.FiveKg; }
     }
 }

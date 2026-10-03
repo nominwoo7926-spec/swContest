@@ -32,19 +32,21 @@ public static class AvatarDemoSetup
         ik.modelRoot.position=tracker.calibration.standingPoint.position;
         worker.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
         var recorder=taskRoot.gameObject.AddComponent<VRSessionRecorder>();
-        recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.avatar=ik;
+        recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.table=taskRoot.GetComponentInChildren<AdjustableWorktable>();recorder.avatar=ik;
         var map=tracking.actions.actionMaps[0];
         if(tracking.actions.FindAction("RecordToggle")==null){map.AddAction("RecordToggle",UnityEngine.InputSystem.InputActionType.Button,"<XRController>{RightHand}/secondaryButton");File.WriteAllText(AssetDatabase.GetAssetPath(tracking.actions),tracking.actions.ToJson());AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(tracking.actions));}
         // Both cameras retain one shared tracking/input system. The observer renders only to its texture.
         var main=tracking.head.GetComponent<Camera>();main.cullingMask&=~((1<<AvatarLayer)|(1<<PanelLayer));
-        var vrPanel=tracking.head.GetComponentInChildren<BodyLoadVisualizer>();SetLayer(vrPanel.gameObject,VrLayer);
+        var vrPanel=taskRoot.GetComponentsInChildren<BodyLoadVisualizer>().First(v=>v.name=="Relative_Load_Panel");SetLayer(vrPanel.gameObject,VrLayer);
         foreach(var marker in tracking.leftHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         foreach(var marker in tracking.rightHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         var cameraObject=new GameObject("SpectatorCamera");cameraObject.transform.SetParent(taskRoot,false);
-        var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=43;camera.allowHDR=false;camera.allowMSAA=true;
+        var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=48;camera.allowHDR=false;camera.allowMSAA=true;
         camera.cullingMask=~(1<<VrLayer);camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
-        camera.transform.position=new Vector3(.6f,2.3f,-5);camera.transform.LookAt(new Vector3(3.1f,1,-3.7f));
+        // Camera replaces the right-hand prop cart: nearly level side/front view of the work.
+        camera.transform.position=new Vector3(7.40f,1.45f,-5.80f);
+        camera.transform.LookAt(new Vector3(3.75f,1.15f,-3.05f));
         string texturePath=Root+"/Generated/Spectator_1080p.renderTexture";
         var texture=AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
         if(texture==null){texture=new RenderTexture(1920,1080,24,RenderTextureFormat.ARGB32){name="Spectator_1080p",antiAliasing=2};AssetDatabase.CreateAsset(texture,texturePath);}
@@ -115,7 +117,7 @@ public static class AvatarDemoSetup
                 {
                     var original=materials[i];var mat=new Material(Shader.Find("FactoryTask/WorkerHeat")){name=original.name+"_Heat"};
                     Texture texture=rocketbox?AssetDatabase.LoadAssetAtPath<Texture2D>(Root+"/Rocketbox/Textures/"+original.name+"_color.tga"):original.mainTexture;
-                    mat.SetTexture("_BaseMap",texture);mat.SetColor("_BaseColor",Color.white);mat.SetFloat("_HeatOpacity",.68f);
+                    mat.SetTexture("_BaseMap",texture);mat.SetColor("_BaseColor",Color.white);mat.SetFloat("_HeatOpacity",1f);
                     materials[i]=Save(mat,Root+"/Generated/"+source.name+"_"+surface.name+"_"+i+".mat");
                 }
                 surface.sharedMaterials=materials;

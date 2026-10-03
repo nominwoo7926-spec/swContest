@@ -19,18 +19,25 @@ namespace FactoryTask
         public int CompletedLeft => completedLeft;
         public int CompletedRight => completedRight;
         public int CompletedTotal => CompletedLeft+CompletedRight;
+        public int PickupCount { get; private set; }
+        public float LastPickupTime { get; private set; } = -999f;
+        public float LastPickupHandHeight { get; private set; }
+        public float LastPickupHeadDrop { get; private set; }
         bool replay;
         float replayWeight;
         public float HeldWeight => replay?replayWeight:(LeftHeld!=null?LeftHeld.weightKg:0)+(RightHeld!=null?RightHeld.weightKg:0);
         public void ApplyRecordedTask(float weight,int left,int right){replay=true;replayWeight=weight;completedLeft=left;completedRight=right;}
-        bool leftWasPressed,rightWasPressed;
+        bool bothGripWasPressed;
         void FixedUpdate(){Tick(Time.fixedDeltaTime);}
         public void Tick(float dt)
         {
             if(!calibration.IsCalibrated)return;
             if(!tracking.HeadTracked||!tracking.Focused){Freeze(LeftHeld,dt);Freeze(RightHeld,dt);return;}
-            ProcessHand(HandSide.Left,tracking.LeftGrip,ref leftWasPressed,dt);
-            ProcessHand(HandSide.Right,tracking.RightGrip,ref rightWasPressed,dt);
+            bool both=tracking.LeftGrip&&tracking.RightGrip;
+            if(both&&!bothGripWasPressed&&LeftHeld==null&&RightHeld==null)TryGrabWithBothGrips();
+            ProcessHand(HandSide.Left,tracking.LeftGrip,dt);
+            ProcessHand(HandSide.Right,tracking.RightGrip,dt);
+            bothGripWasPressed=both;
             for(int i=0;i<pool.Parts.Length;i++)
             {
                 var part=pool.Parts[i];if(part.State!=PartState.Dropped)continue;
@@ -45,23 +52,34 @@ namespace FactoryTask
             }
         }
         void Freeze(ConveyorPart part,float dt){if(part!=null)part.Follow(part.Body.position,part.Body.rotation,dt,false);}
-        void ProcessHand(HandSide side,bool pressed,ref bool wasPressed,float dt)
+        void ProcessHand(HandSide side,bool pressed,float dt)
         {
             var held=Held(side);var hand=tracking.Hand(side);
-            if(!tracking.Tracked(side)){Freeze(held,dt);wasPressed=pressed;return;}
-            if(pressed&&!wasPressed&&held==null)TryGrab(side);
+            if(!tracking.Tracked(side)){Freeze(held,dt);return;}
             held=Held(side);
             if(held!=null)
             {
                 held.Follow(hand.position,hand.rotation,dt,true);
                 if(!pressed){held.Release();if(side==HandSide.Left)LeftHeld=null;else RightHeld=null;}
             }
-            wasPressed=pressed;
+        }
+        public bool TryGrabWithBothGrips()
+        {
+            if(!tracking.LeftGrip||!tracking.RightGrip)return false;
+            float left=NearestDistanceSquared(HandSide.Left),right=NearestDistanceSquared(HandSide.Right);
+            return TryGrab(left<=right?HandSide.Left:HandSide.Right);
+        }
+        float NearestDistanceSquared(HandSide side)
+        {
+            Vector3 hand=tracking.Hand(side).position;float best=float.PositiveInfinity;
+            for(int i=0;i<pool.Parts.Length;i++)
+            { var part=pool.Parts[i];if(part.State!=PartState.Dropped&&!queue.CanPick(part))continue;best=Mathf.Min(best,(part.Shape.ClosestPoint(hand)-hand).sqrMagnitude); }
+            return best;
         }
         public ConveyorPart Held(HandSide side)=>side==HandSide.Left?LeftHeld:RightHeld;
         public bool TryGrab(HandSide side)
         {
-            if(!calibration.IsCalibrated||!tracking.AllTracked||Held(side)!=null||side==HandSide.None)return false;
+            if(!calibration.IsCalibrated||!tracking.AllTracked||!tracking.LeftGrip||!tracking.RightGrip||Held(side)!=null||side==HandSide.None)return false;
             Vector3 hand=tracking.Hand(side).position;ConveyorPart nearest=null;float best=gripReach*gripReach;
             for(int i=0;i<pool.Parts.Length;i++)
             {
@@ -71,6 +89,10 @@ namespace FactoryTask
                 if(distance<=best){nearest=part;best=distance;}
             }
             if(nearest==null||!nearest.Grab(side,hand))return false;
+            PickupCount++;
+            LastPickupTime=Time.unscaledTime;
+            LastPickupHandHeight=hand.y;
+            LastPickupHeadDrop=Mathf.Max(0,calibration.BaselineHead.y-tracking.head.position.y);
             queue.Remove(nearest);if(side==HandSide.Left)LeftHeld=nearest;else RightHeld=nearest;
             return true;
         }

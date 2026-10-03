@@ -24,9 +24,10 @@ namespace FactoryTask
         {
             if(!input.holding)return Vector3.zero;
             float reach=Mathf.Clamp01(input.horizontalReach/.7f),height=Mathf.Clamp01((input.handAboveShoulder+.25f)/.75f);
+            float lowReach=Mathf.Clamp01((-input.handAboveShoulder-.35f)/.55f);
             float mass=Mathf.Clamp01(input.weight/5),duration=Mathf.Clamp01(input.holdSeconds/30),repetitions=Mathf.Clamp01(input.repeats/12),travel=Mathf.Clamp01(input.travelMetres/5);
-            float shoulder=100*(.36f*reach+.2f*height+.34f*mass+.1f*repetitions);
-            float arm=100*(.35f*Mathf.Clamp01(input.totalReach/.9f)+.25f*duration+.3f*repetitions+.1f*mass);
+            float shoulder=100*(.30f*reach+.17f*height+.16f*lowReach+.29f*mass+.08f*repetitions);
+            float arm=100*(.31f*Mathf.Clamp01(input.totalReach/.9f)+.19f*lowReach+.21f*duration+.22f*repetitions+.07f*mass);
             float wrist=100*(.45f*mass+.25f*duration+.2f*travel+.1f*repetitions);
             return new Vector3(Mathf.Clamp(shoulder,0,100),Mathf.Clamp(arm,0,100),Mathf.Clamp(wrist,0,100));
         }

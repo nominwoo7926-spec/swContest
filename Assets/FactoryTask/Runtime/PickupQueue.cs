@@ -6,6 +6,7 @@ namespace FactoryTask
     {
         public Transform[] slots;
         public Transform[] approach;
+        public int tableSlotCount;
         ConveyorPart[] entries;
         public int Count { get; private set; }
         public int Capacity => slots == null ? 0 : slots.Length;
@@ -35,7 +36,7 @@ namespace FactoryTask
             for (int i = 0; i < Count; i++)
             {
                 var part = entries[i];
-                bool onApproach = part.RouteIndex < approach.Length;
+                bool onApproach = i < tableSlotCount && part.RouteIndex < approach.Length;
                 Vector3 target = onApproach ? approach[part.RouteIndex].position : slots[i].position;
                 target += Vector3.up*(part.HalfHeight+.004f);
                 Vector3 next = Vector3.MoveTowards(part.Body.position, target, metresPerSecond * deltaTime);

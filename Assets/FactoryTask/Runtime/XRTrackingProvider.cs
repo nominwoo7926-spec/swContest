@@ -96,12 +96,12 @@ namespace FactoryTask
         }
 #if UNITY_EDITOR
         // Only compiled in the Editor, for automated Play mode verification. No desktop controls ship.
-        public void Simulate(Vector3 headPosition,Vector3 leftPosition,Vector3 rightPosition,bool leftGrip=false,bool rightGrip=false,bool tracked=true)
+        public void Simulate(Vector3 headPosition,Vector3 leftPosition,Vector3 rightPosition,bool leftGrip=false,bool rightGrip=false,bool tracked=true,bool recalibrate=false)
         {
             Simulated=true;Focused=true;floorOrigin=true;
             head.position=headPosition;head.rotation=Quaternion.identity;leftHand.position=leftPosition;rightHand.position=rightPosition;
             leftHand.rotation=rightHand.rotation=Quaternion.identity;HeadTracked=LeftTracked=RightTracked=tracked;
-            LeftGrip=leftGrip;RightGrip=rightGrip;Recalibrate=false;
+            LeftGrip=leftGrip;RightGrip=rightGrip;Recalibrate=recalibrate;
         }
 #endif
     }

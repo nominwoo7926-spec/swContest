@@ -8,9 +8,10 @@ namespace FactoryTask
     [RequireComponent(typeof(Rigidbody), typeof(BoxCollider))]
     public sealed class ConveyorPart : MonoBehaviour
     {
-        public float weightKg = 1;
+        public float weightKg = 5;
         public Renderer bodyRenderer;
         public Material[] weightMaterials;
+        public TextMesh weightLabel;
         public Rigidbody Body { get; private set; }
         public BoxCollider Shape { get; private set; }
         public PartState State { get; private set; }
@@ -46,6 +47,7 @@ namespace FactoryTask
             transform.localScale = Vector3.one * size;
             position += Vector3.up*(size*.5f+.004f);
             if (weightMaterials.Length > kind) bodyRenderer.sharedMaterial = weightMaterials[kind];
+            SetWeightLabel(kind);
             transform.SetPositionAndRotation(position, rotation); Body.position = position; Body.rotation = rotation;
             State = PartState.Conveying; Holder = LastHand = HandSide.None;
             RouteIndex = 0; InsideSeconds = HoldSeconds = TravelMetres = 0; wasTracked = false;
@@ -53,7 +55,9 @@ namespace FactoryTask
         void SetKinematic(bool value)
         {
             if (!Body.isKinematic) { Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; }
-            Body.isKinematic = value; Body.useGravity = !value; Shape.isTrigger = value;
+            Body.isKinematic = value; Body.useGravity = !value;
+            // Keep a solid collider during conveying/waiting so accumulated parts have real contact geometry.
+            Shape.isTrigger = false;
         }
         public void SetQueuePosition(Vector3 position, bool atSlot)
         {
@@ -103,8 +107,15 @@ namespace FactoryTask
             weightKg=kind==0?1:kind==1?3:5;
             transform.localScale=Vector3.one*(.17f+kind*.035f);
             bodyRenderer.sharedMaterial=weightMaterials[kind];
+            SetWeightLabel(kind);
             State=state;gameObject.SetActive(state!=PartState.Pooled);
             transform.SetPositionAndRotation(position,rotation);Body.position=position;Body.rotation=rotation;
+        }
+        void SetWeightLabel(int kind)
+        {
+            if(weightLabel==null)return;
+            weightLabel.text=weightKg.ToString("0")+" kg";
+            weightLabel.color=kind==1?new Color(.04f,.06f,.08f):Color.white;
         }
     }
 }

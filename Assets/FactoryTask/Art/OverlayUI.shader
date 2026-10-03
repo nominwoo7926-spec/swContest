@@ -7,7 +7,7 @@ Shader "FactoryTask/OverlayUI"
         Pass
         {
             Tags { "LightMode"="SRPDefaultUnlit" }
-            Cull Off ZWrite Off ZTest Always Blend SrcAlpha OneMinusSrcAlpha
+            Cull Off ZWrite Off ZTest LEqual Blend SrcAlpha OneMinusSrcAlpha
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag

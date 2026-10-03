@@ -1,15 +1,47 @@
 PASSED
+PASS Live load report stays fixed to the right of the completion bin
+PASS Parts show weight without button-like black inserts or metal studs
 PASS Stable tracked head and hands automatically calibrate
 PASS Standing origin and baseline are aligned to task
+PASS An optional five-button profile, feedback and approval menu starts hidden
+PASS Short Y opens the report directly without duplicate work buttons
+PASS Tracked sensor rows accumulate before a subjective score is entered
+PASS Report opens the optional height input
+PASS Profile menu advances from height to reach
+PASS Reach page returns to the report
+PASS Report opens real discomfort feedback
+PASS VR score 3 labels actual sampled rows in the v3 CSV and opens the report
+PASS Short Y returns to the five normal work buttons
+PASS Only two belt-speed buttons sit behind the worker and outside the spectator view
+PASS Automatic table and agent remain on without extra buttons
+PASS Supply is fixed at 5 kg with no weight-selection controls
+PASS VR control buttons retain their authored physical size after Update
+PASS Legacy weight changes cannot override the 5 kg supply
+PASS Belt speed is displayed in metres per second
+PASS Controller tip contact increases belt speed
 PASS Binary session recording starts after calibration
 PASS Real skinned worker uses a valid Humanoid avatar
 PASS Spectator output is isolated from headset rendering
-PASS Conveyor delivers and parks four FIFO parts
+PASS Avatar shoe soles start on the calibrated floor
+PASS Conveyor fills the bounded FIFO accumulation queue
+PASS Every supplied box is visibly labeled 5 kg
+PASS Belt, pickup table and completion bin form a clear left-to-right line
+PASS Queued parts accumulate on the belt while three pickup parts follow the moving table
+PASS Waiting part rests above the pickup surface without being half buried
 PASS Full queue applies backpressure without instantiation
+PASS Agent proposes a safer table setting without moving equipment before approval
+PASS Approval applies the proposed virtual table target
+PASS Agent retains a pending verification for its physical table action
+PASS Sensor loss invalidates unverifiable action outcomes
+PASS Lowering the table moves the solid surface and queued pickup part
+PASS Lowest table position keeps the waiting part fully visible above the surface
+PASS A hand left at standing-height cannot grab the lowered part
+PASS One Grip cannot start a pickup even when touching the part
 PASS Simultaneous grips cannot own the same part twice
 PASS Removing the first item advances the next FIFO item
 PASS Left-hand work raises left shoulder, arm and wrist independently
-PASS Avatar grip anchor follows the held part within reachable arm range (error=0.002 m)
+PASS Avatar grip anchor follows the held part within reachable arm range (error=0.000 m)
+PASS Avatar wrists remain inside the visual bend limit
 PASS Avatar palm and the part surface grip position agree
 PASS Avatar eye anchor follows the tracked HMD pose
 PASS Surface heat shader receives independent left/right loads
@@ -25,14 +57,19 @@ PASS Right-hand work drives right-side scores
 PASS Right completion is recorded separately
 PASS Recent repetition history is isolated by hand
 PASS Repetition history expires after 60 seconds
-PASS Pool reuses instances and stays bounded at twelve
+PASS Pool reuses instances and stays bounded at sixteen
 PASS Queue capacity stays bounded throughout the task
+PASS Sensor loss stops automatic intervention and reports why
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS Head, hands, parts, scores and task counts are streamed to a bounded binary recording
 PASS Recorded session reopens for third-person playback
+PASS New session format contains changing table height and belt speed
 PASS Playback disables live simulation and XR pose writes
+PASS Playback restores the recorded physical table surface and belt speed rather than burying parts below a static table
 PASS Recorded left/right task counts survive playback
 PASS Recorded torso load survives playback
 PASS Recorded head trajectory survives playback
 PASS Recording restarts from its first frame
+PASS Both shoe soles remain on the floor with a 1.10 m tracked head height
+PASS Feet remain below the corrected pelvis rather than stretching toward the old work position

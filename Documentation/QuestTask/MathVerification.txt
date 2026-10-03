@@ -4,8 +4,11 @@ PASS Longer holding increases arm and wrist
 PASS Hand travel increases wrist
 PASS Recent repetition increases arm
 PASS Higher hands increase shoulder
+PASS Low table reach increases shoulder and arm load
 PASS Head drop and forward displacement increase torso
 PASS Torso is bounded 0 to 100
+PASS Controller origin behind its tip activates the touched panel button
+PASS Adjacent button is not activated by the same controller pose
 PASS Load decays gradually rather than clearing on release
 PASS Color endpoints are green and red
 PASS Midpoint is yellow

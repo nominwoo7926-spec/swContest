@@ -14,6 +14,7 @@ namespace FactoryTask
         public XRGrabTaskTracker task;
         public PartSpawner pool;
         public ConveyorController conveyor;
+        public AdjustableWorktable table;
         public FullBodyAvatarIK avatar;
         public bool autoRecord = true;
         public bool IsRecording => writer != null;
@@ -24,20 +25,21 @@ namespace FactoryTask
         public float PlaybackSeconds => playbackClock;
         public int FramesWritten { get; private set; }
         public float Duration { get; private set; }
+        public bool HasRecordedEquipment => formatVersion >= 2;
         public const int Rate = 30;
-        const int Magic = 0x46565232, Version = 1, HeaderBytes = 16;
+        const int Magic = 0x46565232, Version = 2, HeaderBytes = 16;
         BinaryWriter writer;
         BinaryReader reader;
         float started, nextSample, nextFlush, toggleHeld, playbackClock;
         bool toggleConsumed, autoStarted, paused;
-        int capacity, frameBytes;
+        int capacity, frameBytes, formatVersion;
         Frame a, b;
         readonly float[] mixedScores = new float[7];
         public static string SessionDirectory => Path.Combine(Application.persistentDataPath,"FactorySessions");
 
         sealed class Frame
         {
-            public float time,weight;
+            public float time,weight,tableHeight,beltSpeed;
             public int flags,left,right;
             public Vector3 hp,lp,rp,baseline,forward;
             public Quaternion hq,lq,rq;
@@ -81,14 +83,19 @@ namespace FactoryTask
                 pool.Initialize();capacity=pool.Parts.Length;
                 writer=new BinaryWriter(new FileStream(CurrentPath,FileMode.CreateNew,FileAccess.Write,FileShare.Read,65536));
                 writer.Write(Magic);writer.Write(Version);writer.Write(capacity);writer.Write(Rate);
-                FramesWritten=0;LastError=null;started=nextSample=Time.unscaledTime;nextFlush=started+1;return true;
+                formatVersion=Version;
+                FramesWritten=0;LastError=null;started=nextSample=Time.unscaledTime;nextFlush=started+1;
+                Debug.Log("FACTORY_SESSION_RECORDING_STARTED "+CurrentPath);
+                return true;
             }
-            catch(Exception e){LastError=e.Message;StopRecording();return false;}
+            catch(Exception e){LastError=e.Message;StopRecording();Debug.LogError("FACTORY_SESSION_RECORDING_FAILED "+LastError);return false;}
         }
         public void StopRecording()
         {
             if(writer==null)return;
-            try{writer.Flush();writer.Dispose();}catch(Exception e){LastError=e.Message;}finally{writer=null;}
+            try{writer.Flush();writer.Dispose();Debug.Log("FACTORY_SESSION_RECORDING_SAVED "+CurrentPath+" frames="+FramesWritten);}
+            catch(Exception e){LastError=e.Message;Debug.LogError("FACTORY_SESSION_RECORDING_SAVE_FAILED "+LastError);}
+            finally{writer=null;}
         }
         void WriteFrame()
         {
@@ -99,6 +106,8 @@ namespace FactoryTask
             Write(calibration.BaselineHead);Write(calibration.Forward);
             for(int i=0;i<7;i++)writer.Write(estimator.Score(i));
             writer.Write(task.HeldWeight);writer.Write(task.CompletedLeft);writer.Write(task.CompletedRight);
+            writer.Write(table==null?AdjustableWorktable.DefaultHeight:table.Height);
+            writer.Write(conveyor==null?ConveyorController.DefaultSpeed:conveyor.Speed);
             for(int i=0;i<capacity;i++)
             {
                 var p=pool.Parts[i];writer.Write((byte)p.State);writer.Write((byte)(p.weightKg<=1?0:p.weightKg<=3?1:2));Write(p.transform);
@@ -114,10 +123,12 @@ namespace FactoryTask
             try
             {
                 reader=new BinaryReader(new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite,65536));
-                if(reader.ReadInt32()!=Magic||reader.ReadInt32()!=Version)throw new InvalidDataException("Unsupported Factory session file");
+                if(reader.ReadInt32()!=Magic)throw new InvalidDataException("Unsupported Factory session file");
+                formatVersion=reader.ReadInt32();
+                if(formatVersion<1||formatVersion>Version)throw new InvalidDataException("Unsupported Factory session version");
                 capacity=reader.ReadInt32();int rate=reader.ReadInt32();pool.Initialize();
                 if(capacity!=pool.Parts.Length||capacity<1||capacity>16||rate!=Rate)throw new InvalidDataException("Session pool/version differs from this scene");
-                frameBytes=156+capacity*30;
+                frameBytes=(formatVersion>=2?164:156)+capacity*30;
                 if(reader.BaseStream.Length<HeaderBytes+frameBytes*2)throw new InvalidDataException("Session needs at least two complete frames");
                 long completeFrames=(reader.BaseStream.Length-HeaderBytes)/frameBytes;
                 reader.BaseStream.Position=HeaderBytes+(completeFrames-1)*frameBytes;Duration=reader.ReadSingle();
@@ -135,6 +146,8 @@ namespace FactoryTask
             f.hp=ReadVector();f.hq=ReadRotation();f.lp=ReadVector();f.lq=ReadRotation();f.rp=ReadVector();f.rq=ReadRotation();
             f.baseline=ReadVector();f.forward=ReadVector();for(int i=0;i<7;i++)f.scores[i]=reader.ReadSingle();
             f.weight=reader.ReadSingle();f.left=reader.ReadInt32();f.right=reader.ReadInt32();
+            f.tableHeight=formatVersion>=2?reader.ReadSingle():AdjustableWorktable.DefaultHeight;
+            f.beltSpeed=formatVersion>=2?reader.ReadSingle():ConveyorController.DefaultSpeed;
             for(int i=0;i<capacity;i++){f.state[i]=reader.ReadByte();f.kind[i]=reader.ReadByte();f.pp[i]=ReadVector();f.pq[i]=ReadRotation();}
             return true;
         }
@@ -161,6 +174,11 @@ namespace FactoryTask
             calibration.ApplyRecordedCalibration(discrete.baseline,discrete.forward);
             for(int i=0;i<7;i++)mixedScores[i]=Mathf.Lerp(a.scores[i],b.scores[i],t);
             estimator.ApplyRecordedScores(mixedScores);task.ApplyRecordedTask(discrete.weight,discrete.left,discrete.right);
+            if(formatVersion>=2)
+            {
+                if(table!=null)table.ApplyRecordedHeight(Mathf.Lerp(a.tableHeight,b.tableHeight,t));
+                if(conveyor!=null)conveyor.ApplyRecordedSpeed(Mathf.Lerp(a.beltSpeed,b.beltSpeed,t));
+            }
             for(int i=0;i<capacity;i++)
             {
                 // Never interpolate a pooled item across the factory when its pool slot is reused.

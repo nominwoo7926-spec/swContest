@@ -6,8 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Factory/Scenes/SmartFactory.unity
-    guid: 257a670dc27c1824a89b32ce80cd2ff0
+    path: Assets/Factory/Scenes/SmartFactory_QuestTask.unity
+    guid: 5b78fffb4d2e69a49b5fad786ffbe08a
   m_configObjects:
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 8f410be8d507e01428d4edf580bdd430, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: f7aed20542d16e046bd3b33f8c2e6f6f, type: 2}

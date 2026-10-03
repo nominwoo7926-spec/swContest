@@ -1,4 +1,4 @@
 Succeeded
 Errors: 1
 Warnings: 4
-APK bytes: 49337934
+APK bytes: 47044776

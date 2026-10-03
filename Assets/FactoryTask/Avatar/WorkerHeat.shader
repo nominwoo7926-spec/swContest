@@ -27,29 +27,43 @@ Shader "FactoryTask/WorkerHeat"
             float4 _BaseMap_ST;half4 _BaseColor;float4 _LoadsA,_LoadsB;half _HeatOpacity;
             CBUFFER_END
             struct A {float4 positionOS:POSITION;float3 normalOS:NORMAL;float2 uv:TEXCOORD0;float4 maskA:TEXCOORD2;float4 maskB:TEXCOORD3;UNITY_VERTEX_INPUT_INSTANCE_ID};
-            struct V {float4 positionCS:SV_POSITION;float2 uv:TEXCOORD0;half3 normal:TEXCOORD1;float3 world:TEXCOORD2;half2 heat:TEXCOORD3;UNITY_VERTEX_OUTPUT_STEREO};
+            struct V {float4 positionCS:SV_POSITION;float2 uv:TEXCOORD0;half3 normal:TEXCOORD1;float3 world:TEXCOORD2;half4 maskA:TEXCOORD3;half4 maskB:TEXCOORD4;UNITY_VERTEX_OUTPUT_STEREO};
             V vert(A i)
             {
                 V o;UNITY_SETUP_INSTANCE_ID(i);UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.world=TransformObjectToWorld(i.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);
                 o.normal=TransformObjectToWorldNormal(i.normalOS);o.uv=TRANSFORM_TEX(i.uv,_BaseMap);
-                float mask=dot(i.maskA,1)+dot(i.maskB.xyz,1);
-                o.heat=half2((dot(i.maskA,_LoadsA)+dot(i.maskB,_LoadsB))/max(mask,.0001),saturate(mask));return o;
+                o.maskA=i.maskA;o.maskB=i.maskB;return o;
+            }
+            void SelectRegion(half weight,half load,inout half strongest,inout half runnerUp,inout half score)
+            {
+                if(weight>strongest){runnerUp=strongest;strongest=weight;score=load;}
+                else runnerUp=max(runnerUp,weight);
             }
             half4 frag(V i):SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 half3 albedo=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb*_BaseColor.rgb;
-                half score=saturate(i.heat.x);
-                half3 green=half3(.045,.78,.23),yellow=half3(1,.72,.025),red=half3(.95,.025,.018);
-                half3 heat=score<.5?lerp(green,yellow,score*2):lerp(yellow,red,score*2-1);
-                // Keep garment detail visible beneath the surface color; no detached indicator geometry.
-                half detail=dot(albedo,half3(.21,.72,.07));
-                albedo=lerp(albedo,heat*(.68+detail*.5),i.heat.y*_HeatOpacity);
+                half strongest=0,runnerUp=0,score=0;
+                SelectRegion(i.maskA.x,_LoadsA.x,strongest,runnerUp,score);
+                SelectRegion(i.maskA.y,_LoadsA.y,strongest,runnerUp,score);
+                SelectRegion(i.maskA.z,_LoadsA.z,strongest,runnerUp,score);
+                SelectRegion(i.maskA.w,_LoadsA.w,strongest,runnerUp,score);
+                SelectRegion(i.maskB.x,_LoadsB.x,strongest,runnerUp,score);
+                SelectRegion(i.maskB.y,_LoadsB.y,strongest,runnerUp,score);
+                SelectRegion(i.maskB.z,_LoadsB.z,strongest,runnerUp,score);
+                score=saturate(score);
+                half covered=step(.16h,strongest);
+                // One region and one categorical color per pixel: no blended boundary heat.
+                half3 heat=score<.36h?half3(.02,.78,.16):score<.68h?half3(1,.68,.015):half3(.98,.035,.025);
+                albedo=lerp(albedo,heat,covered*_HeatOpacity);
+                half dividingLine=covered*(1-step(.09h,strongest-runnerUp));
+                half outerLine=step(.10h,strongest)*(1-step(.19h,strongest));
+                albedo=lerp(albedo,half3(.015,.025,.035),saturate(dividingLine+outerLine));
                 Light light=GetMainLight(TransformWorldToShadowCoord(i.world));
                 half3 n=normalize(i.normal);
                 half3 lit=albedo*(max(SampleSH(n),half3(.28,.28,.28))+light.color*(.22+.78*saturate(dot(n,light.direction)))*lerp(.65,1,light.shadowAttenuation));
-                lit+=heat*i.heat.y*score*score*.14;
+                lit+=heat*covered*score*score*.08;
                 return half4(lit,1);
             }
             ENDHLSL

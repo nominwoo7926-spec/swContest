@@ -6,7 +6,7 @@ Unity 6000.3.25f1의 별도 검증 프로젝트에서 실행한 뒤, 검증된 �
 - 계산 검증 12개: 무게·거리·높이·시간·손 이동·반복 증가, 상체 범위, 감소 및 색상. 상세: `MathVerification.txt`.
 - 실제 Unity Play 모드 통합 검증 22개: 합성 HMD/양손 입력을 사용한 자동 보정, 공급/대기열, 동시 잡기 방지, 좌우 분리, 추적 손실, 바닥 재집기, 완료 판정, 풀 반환, 점수 감소와 상체 변화. 상세: `PlayVerification.txt`.
 - `TaskView.png`와 `PlayView.png`: Unity 렌더 결과를 직접 확인. 패널의 깨진 셰이더 참조를 수정하고 재검증했습니다. `PlayView.png`는 왼손 작업 시점입니다.
-- Android IL2CPP ARM64 최종 빌드 성공: 오류 0개, 경고 4개, APK 45,943,174바이트. APK 내부의 앱 ID, ARM64 라이브러리와 VR headtracking 선언도 확인했습니다. 상세는 `AndroidBuild.txt`, APK는 `Builds/QuestTask/NOVA_FactoryTask.apk`입니다. OpenXR 선택적 설정 권고 및 진단 심볼 관련 빌드 경고는 남아 있습니다.
+- 과거 빌드 기록이다. 최신 빌드 결과는 `AndroidBuild.txt`, APK는 `Builds/QuestTask/Adaptive_Workbench_VR.apk`를 확인한다. Quest 착용 상태의 최신 빌드 전체 시연은 별도 확인이 필요하다.
 - 현재 프로젝트의 작업 파일과 APK가 검증본과 동일함을 해시로 확인했고, 장면·Prefab·재질의 직렬화된 GUID 참조 누락은 0개였습니다.
 - 설치 스크립트는 PowerShell 구문 검사를 통과했습니다. 연결된 Quest가 없어 실제 설치·실행은 하지 않았습니다.
 

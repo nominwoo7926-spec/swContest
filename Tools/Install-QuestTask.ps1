@@ -1,7 +1,7 @@
 param([string]$AdbPath)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
-$apkPath = Join-Path $projectRoot 'Builds/QuestTask/NOVA_FactoryTask.apk'
+$apkPath = Join-Path $projectRoot 'Builds/QuestTask/Adaptive_Workbench_VR.apk'
 if (-not (Test-Path -LiteralPath $apkPath)) { throw "APK not found: $apkPath" }
 if (-not $AdbPath) {
     $versionText = Get-Content -LiteralPath (Join-Path $projectRoot 'ProjectSettings/ProjectVersion.txt')
@@ -22,6 +22,12 @@ if ($devices.Count -ne 1) {
 $serial = ($devices[0] -split '\s+')[0]
 & $AdbPath -s $serial install -r $apkPath
 if ($LASTEXITCODE -ne 0) { throw 'APK installation failed.' }
-& $AdbPath -s $serial shell monkey -p com.nova.smartfactory -c android.intent.category.LAUNCHER 1
-if ($LASTEXITCODE -ne 0) { throw 'Installed, but application launch failed. Open NOVA Factory Task on the headset.' }
-Write-Output 'Installed and launched NOVA Factory Task. Put on the headset and stand comfortably for calibration.'
+& $AdbPath -s $serial shell monkey -p com.nova.smartfactory.questtask -c android.intent.category.LAUNCHER 1
+if ($LASTEXITCODE -ne 0) { throw 'Installed, but application launch failed. Open Adaptive Workbench VR on the headset.' }
+Start-Sleep -Seconds 2
+$running = (@(& $AdbPath -s $serial shell pidof com.nova.smartfactory.questtask) -join '').Trim()
+if ($running) {
+    Write-Output 'Installed and running Adaptive Workbench VR. Put on the headset and stand comfortably for calibration.'
+} else {
+    Write-Output 'Installed. Quest is waiting for headset/controller launch confirmation. Put on the headset, wake both controllers, and open Adaptive Workbench VR.'
+}
