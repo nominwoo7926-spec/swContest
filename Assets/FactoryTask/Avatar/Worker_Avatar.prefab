@@ -1174,6 +1174,8 @@ GameObject:
   - component: {fileID: 117553979133702044}
   - component: {fileID: 4412086022068332134}
   - component: {fileID: 6044318092393881832}
+  - component: {fileID: 5938808090859494519}
+  - component: {fileID: 5969949278078137725}
   m_Layer: 30
   m_Name: Worker_Avatar
   m_TagString: Untagged
@@ -1204,7 +1206,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3847496887632787597}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 160c5d951cf80a645a7a9f461fb8d199, type: 3}
   m_Name: 
@@ -1558,6 +1560,248 @@ MonoBehaviour:
   estimator: {fileID: 0}
   surfaces:
   - {fileID: 6169627146480063284}
+--- !u!114 &5938808090859494519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3847496887632787597}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b98fb037b5a4f52a3c726b808c3a9b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FactoryTask.MovementBodyPoseStream
+  _providedSkeletonType: 1
+  _validBodyTrackingDelay: 0.25
+  _debugDrawSkeleton: 0
+  _debugSkeletonColor: {r: 1, g: 1, b: 1, a: 1}
+  _enableAIMotionSynthesizer: 0
+  _aiMotionSynthesizerConfig:
+    Config: {fileID: 0}
+    ModelAsset: {fileID: 0}
+    GuidanceAsset: {fileID: 0}
+    InputProvider: {fileID: 0}
+    RootMotionMode: 1
+    ReferenceTransform: {fileID: 0}
+    EnableSynthesizedStandingPose: 0
+    UpperBodySource: 0
+    LowerBodySource: 1
+    RootAlignmentDirection: 0
+    BlendMode: 1
+    BlendFactor: 0
+    ManualVelocity: {x: 0, y: 0, z: 0}
+    ManualDirection: {x: 0, y: 0, z: 1}
+    BlendInTime: 0.25
+    BlendOutTime: 1
+    DebugDrawAIMotionSynthesizer: 0
+    DebugAIMotionSynthesizerColor: {r: 0, g: 0, b: 1, a: 1}
+--- !u!114 &5969949278078137725
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3847496887632787597}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f33d97102f288541ac193243cdafeec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Meta.XR.Movement::Meta.XR.Movement.Retargeting.CharacterRetargeter
+  _config: {fileID: 4900000, guid: 5dc60123ea8c759459088aba35e08090, type: 3}
+  _jointPairs:
+  - Joint: {fileID: 2138569545670613408}
+    ParentJoint: {fileID: 0}
+  - Joint: {fileID: 5800323714400278361}
+    ParentJoint: {fileID: 2138569545670613408}
+  - Joint: {fileID: 5108265169109451521}
+    ParentJoint: {fileID: 2138569545670613408}
+  - Joint: {fileID: 2315070438538123842}
+    ParentJoint: {fileID: 5108265169109451521}
+  - Joint: {fileID: 3975435096930961669}
+    ParentJoint: {fileID: 2315070438538123842}
+  - Joint: {fileID: 3797961131707305716}
+    ParentJoint: {fileID: 3975435096930961669}
+  - Joint: {fileID: 8340995569102310373}
+    ParentJoint: {fileID: 3797961131707305716}
+  - Joint: {fileID: 4428479013900666395}
+    ParentJoint: {fileID: 8340995569102310373}
+  - Joint: {fileID: 4276815373159638786}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 1103059994222582244}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7386928188234861249}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 2821241575524749156}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 3133162070298827817}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7848845658295204074}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 1716375912464759540}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 219507034166229747}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 3544821114996634162}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 5630038883130932572}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 6465752503391403219}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 56362020318335515}
+    ParentJoint: {fileID: 6465752503391403219}
+  - Joint: {fileID: 83358429711976760}
+    ParentJoint: {fileID: 6465752503391403219}
+  - Joint: {fileID: 5194865921497236155}
+    ParentJoint: {fileID: 6465752503391403219}
+  - Joint: {fileID: 8818139273097585375}
+    ParentJoint: {fileID: 6465752503391403219}
+  - Joint: {fileID: 628601305131714460}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7046705223456162642}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 4051252899147678026}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 795555941149098899}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 1311888156546409181}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7585011535381455730}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 4860414987973066689}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7576578337592959817}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7482593360206502684}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 6952731966090961162}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 3765810328640040377}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 7210857540298116708}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 4056250580780192426}
+    ParentJoint: {fileID: 4428479013900666395}
+  - Joint: {fileID: 894832534747460374}
+    ParentJoint: {fileID: 3797961131707305716}
+  - Joint: {fileID: 4083495875593954525}
+    ParentJoint: {fileID: 894832534747460374}
+  - Joint: {fileID: 7387461764408554324}
+    ParentJoint: {fileID: 4083495875593954525}
+  - Joint: {fileID: 8276094346728102505}
+    ParentJoint: {fileID: 7387461764408554324}
+  - Joint: {fileID: 189346946616241060}
+    ParentJoint: {fileID: 8276094346728102505}
+  - Joint: {fileID: 8415942775728700139}
+    ParentJoint: {fileID: 189346946616241060}
+  - Joint: {fileID: 3313399218999438846}
+    ParentJoint: {fileID: 8415942775728700139}
+  - Joint: {fileID: 1219233052538057406}
+    ParentJoint: {fileID: 8276094346728102505}
+  - Joint: {fileID: 3653515836253488737}
+    ParentJoint: {fileID: 1219233052538057406}
+  - Joint: {fileID: 5305969402520130580}
+    ParentJoint: {fileID: 3653515836253488737}
+  - Joint: {fileID: 3146132136945832599}
+    ParentJoint: {fileID: 8276094346728102505}
+  - Joint: {fileID: 2548684001638571022}
+    ParentJoint: {fileID: 3146132136945832599}
+  - Joint: {fileID: 4857788225573479400}
+    ParentJoint: {fileID: 2548684001638571022}
+  - Joint: {fileID: 4900244598803922763}
+    ParentJoint: {fileID: 8276094346728102505}
+  - Joint: {fileID: 7532604182568064101}
+    ParentJoint: {fileID: 4900244598803922763}
+  - Joint: {fileID: 8457216174686947327}
+    ParentJoint: {fileID: 7532604182568064101}
+  - Joint: {fileID: 405821700680954715}
+    ParentJoint: {fileID: 8276094346728102505}
+  - Joint: {fileID: 6222366762229401953}
+    ParentJoint: {fileID: 405821700680954715}
+  - Joint: {fileID: 3494991323602786791}
+    ParentJoint: {fileID: 6222366762229401953}
+  - Joint: {fileID: 2348692908004682644}
+    ParentJoint: {fileID: 8276094346728102505}
+  - Joint: {fileID: 2249511877396599515}
+    ParentJoint: {fileID: 3797961131707305716}
+  - Joint: {fileID: 5869057028050152826}
+    ParentJoint: {fileID: 2249511877396599515}
+  - Joint: {fileID: 5848558290237783077}
+    ParentJoint: {fileID: 5869057028050152826}
+  - Joint: {fileID: 3905959935266663402}
+    ParentJoint: {fileID: 5848558290237783077}
+  - Joint: {fileID: 1779020527966622777}
+    ParentJoint: {fileID: 3905959935266663402}
+  - Joint: {fileID: 721017433809058092}
+    ParentJoint: {fileID: 1779020527966622777}
+  - Joint: {fileID: 4162473009012594984}
+    ParentJoint: {fileID: 721017433809058092}
+  - Joint: {fileID: 2230885838617815478}
+    ParentJoint: {fileID: 3905959935266663402}
+  - Joint: {fileID: 4373162701503498359}
+    ParentJoint: {fileID: 2230885838617815478}
+  - Joint: {fileID: 7164018374081434091}
+    ParentJoint: {fileID: 4373162701503498359}
+  - Joint: {fileID: 5017773323464656534}
+    ParentJoint: {fileID: 3905959935266663402}
+  - Joint: {fileID: 4869221375877194649}
+    ParentJoint: {fileID: 5017773323464656534}
+  - Joint: {fileID: 2010714016378617776}
+    ParentJoint: {fileID: 4869221375877194649}
+  - Joint: {fileID: 9105252602027471483}
+    ParentJoint: {fileID: 3905959935266663402}
+  - Joint: {fileID: 5994743253595567245}
+    ParentJoint: {fileID: 9105252602027471483}
+  - Joint: {fileID: 403960445857129472}
+    ParentJoint: {fileID: 5994743253595567245}
+  - Joint: {fileID: 4248722985288770353}
+    ParentJoint: {fileID: 3905959935266663402}
+  - Joint: {fileID: 805465800157862303}
+    ParentJoint: {fileID: 4248722985288770353}
+  - Joint: {fileID: 4254262622280590799}
+    ParentJoint: {fileID: 805465800157862303}
+  - Joint: {fileID: 3067165691840587186}
+    ParentJoint: {fileID: 3905959935266663402}
+  - Joint: {fileID: 5636278315794016452}
+    ParentJoint: {fileID: 5108265169109451521}
+  - Joint: {fileID: 2042063761975161066}
+    ParentJoint: {fileID: 5636278315794016452}
+  - Joint: {fileID: 1706185245177694479}
+    ParentJoint: {fileID: 2042063761975161066}
+  - Joint: {fileID: 8615231225778585832}
+    ParentJoint: {fileID: 1706185245177694479}
+  - Joint: {fileID: 7576928076522803132}
+    ParentJoint: {fileID: 5108265169109451521}
+  - Joint: {fileID: 7186579883742908720}
+    ParentJoint: {fileID: 7576928076522803132}
+  - Joint: {fileID: 5100097615178930555}
+    ParentJoint: {fileID: 7186579883742908720}
+  - Joint: {fileID: 3009256477937506256}
+    ParentJoint: {fileID: 5100097615178930555}
+  _shapePoseData: []
+  _maxFaceshapeValue: 100
+  _debugDrawSourceSkeleton: 0
+  _debugDrawSourceSkeletonColor: {r: 0.5, g: 0.75, b: 1, a: 1}
+  _debugDrawTargetSkeleton: 0
+  _debugDrawTargetSkeletonColor: {r: 1, g: 0.75, b: 0.5, a: 1}
+  _debugDrawInvalidTargetSkeletonColor: {r: 1, g: 0, b: 0, a: 1}
+  _debugDrawInvalidSourceSkeletonColor: {r: 1, g: 0, b: 1, a: 1}
+  _debugDrawSourceTPose: 0
+  _debugDrawSourceTPoseColor: {r: 0, g: 0.5, b: 1, a: 1}
+  _debugDrawTargetTPose: 0
+  _debugDrawTargetTPoseColor: {r: 1, g: 0.5, b: 0, a: 1}
+  _skeletonRetargeter:
+    HipsScale: {x: 0, y: 0, z: 0}
+    _retargetingBehavior: 0
+    _hideLowerBodyWhenUpperBodyTracking: 0
+    _hideLegScale: {x: 0, y: 0, z: 0}
+    _applyRootScale: 1
+    _applyHeadScale: 1
+    _currentScale: 1
+    _headScaleFactor: 0.95
+    _scaleRange: {x: 0.8, y: 1.2}
+  _sourceProcessorContainers: []
+  _targetProcessorContainers: []
 --- !u!1 &3861138505362441896
 GameObject:
   m_ObjectHideFlags: 0

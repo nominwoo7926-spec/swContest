@@ -10,6 +10,9 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using Meta.XR.Movement.Retargeting;
+using Meta.XR.Movement.Editor;
+using Meta.XR.Movement.Retargeting.Editor;
 using Object = UnityEngine.Object;
 
 public static class AvatarDemoSetup
@@ -21,6 +24,53 @@ public static class AvatarDemoSetup
 
     [MenuItem("Tools/Smart Factory/Avatar Demo/Setup or Repair Avatar Demo")]
     public static void Setup(){QuestTaskSetup.Setup();}
+
+    [MenuItem("Tools/Smart Factory/Avatar Demo/Configure Movement Body Tracking")]
+    public static void ConfigureMovementBodyTracking()
+    {
+        var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+        if(prefab==null)throw new InvalidOperationException("Create the worker avatar prefab first.");
+        var metadata=MSDKUtilityEditor.RunDefaultRetargetingSetup(prefab);
+        if(metadata==null||metadata.ConfigJson==null)throw new InvalidOperationException("Movement retargeting config could not be generated.");
+        var root=PrefabUtility.LoadPrefabContents(PrefabPath);
+        try
+        {
+            var standard=root.GetComponent<MetaSourceDataProvider>();
+            if(standard!=null&&standard.GetType()==typeof(MetaSourceDataProvider))Object.DestroyImmediate(standard,true);
+            var source=root.GetComponent<MovementBodyPoseStream>();
+            if(source==null)source=root.AddComponent<MovementBodyPoseStream>();
+            source.ProvidedSkeletonType=OVRPlugin.BodyJointSet.FullBody;
+            var retargeter=root.GetComponent<CharacterRetargeter>();
+            if(retargeter==null)retargeter=root.AddComponent<CharacterRetargeter>();
+            retargeter.ConfigAsset=metadata.ConfigJson;
+            CharacterRetargeterConfigEditor.LoadConfig(new SerializedObject(retargeter),retargeter);
+            var ik=root.GetComponent<FullBodyAvatarIK>();if(ik!=null)ik.enabled=false;
+            PrefabUtility.SaveAsPrefabAsset(root,PrefabPath);
+        }
+        finally{PrefabUtility.UnloadPrefabContents(root);}
+        var runtime=OVRRuntimeSettings.GetRuntimeSettings();
+        runtime.BodyTrackingJointSet=OVRPlugin.BodyJointSet.FullBody;
+        runtime.BodyTrackingFidelity=OVRPlugin.BodyTrackingFidelity2.High;
+        EditorUtility.SetDirty(runtime);AssetDatabase.SaveAssets();
+        Debug.Log("Movement Body Tracking configured. Run Setup or Repair Avatar Demo once to refresh the scene instance.");
+    }
+
+    public static void ConfigureMovementAndBuildQuestBatch()
+    {
+        try
+        {
+            ConfigureMovementBodyTracking();
+            QuestTaskSetup.Setup();
+            QuestTaskSetup.Validate();
+            QuestTaskSetup.BuildAndroid();
+            EditorApplication.Exit(0);
+        }
+        catch(Exception error)
+        {
+            Debug.LogException(error);
+            EditorApplication.Exit(1);
+        }
+    }
     public static void Attach(Transform taskRoot)
     {
         Directory.CreateDirectory(Root+"/Generated");AssetDatabase.Refresh();
@@ -29,22 +79,24 @@ public static class AvatarDemoSetup
         var tracker=taskRoot.GetComponentInChildren<XRGrabTaskTracker>();var tracking=tracker.tracking;
         var worker=(GameObject)PrefabUtility.InstantiatePrefab(prefab,taskRoot);
         var ik=worker.GetComponent<FullBodyAvatarIK>();ik.tracking=tracking;ik.calibration=tracker.calibration;
+        var bodySource=worker.GetComponent<MovementBodyPoseStream>();
+        var bodyRetargeter=worker.GetComponent<CharacterRetargeter>();
         ik.modelRoot.position=tracker.calibration.standingPoint.position;
         worker.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
         var recorder=taskRoot.gameObject.AddComponent<VRSessionRecorder>();
-        recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.avatar=ik;
+        recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.avatar=ik;recorder.bodySource=bodySource;recorder.bodyRetargeter=bodyRetargeter;
         var map=tracking.actions.actionMaps[0];
         if(tracking.actions.FindAction("RecordToggle")==null){map.AddAction("RecordToggle",UnityEngine.InputSystem.InputActionType.Button,"<XRController>{RightHand}/secondaryButton");File.WriteAllText(AssetDatabase.GetAssetPath(tracking.actions),tracking.actions.ToJson());AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(tracking.actions));}
         // Both cameras retain one shared tracking/input system. The observer renders only to its texture.
         var main=tracking.head.GetComponent<Camera>();main.cullingMask&=~((1<<AvatarLayer)|(1<<PanelLayer));
-        var vrPanel=tracking.head.GetComponentInChildren<BodyLoadVisualizer>();SetLayer(vrPanel.gameObject,VrLayer);
+        var vrPanel=taskRoot.GetComponentInChildren<BodyLoadVisualizer>(true);SetLayer(vrPanel.gameObject,VrLayer);
         foreach(var marker in tracking.leftHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         foreach(var marker in tracking.rightHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         var cameraObject=new GameObject("SpectatorCamera");cameraObject.transform.SetParent(taskRoot,false);
         var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=43;camera.allowHDR=false;camera.allowMSAA=true;
         camera.cullingMask=~(1<<VrLayer);camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
-        camera.transform.position=new Vector3(.6f,2.3f,-5);camera.transform.LookAt(new Vector3(3.1f,1,-3.7f));
+        camera.transform.position=new Vector3(.6f,2.3f,-5);camera.transform.LookAt(new Vector3(2.45f,1,-3.45f));
         string texturePath=Root+"/Generated/Spectator_1080p.renderTexture";
         var texture=AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
         if(texture==null){texture=new RenderTexture(1920,1080,24,RenderTextureFormat.ARGB32){name="Spectator_1080p",antiAliasing=2};AssetDatabase.CreateAsset(texture,texturePath);}
@@ -93,6 +145,7 @@ public static class AvatarDemoSetup
             foreach(var bone in Required)if(!bones.ContainsKey(bone))throw new InvalidOperationException("Missing humanoid bone: "+bone);
             if(animator!=null){animator.enabled=false;animator.applyRootMotion=false;}
             var ik=root.AddComponent<FullBodyAvatarIK>();ik.modelRoot=model.transform;ik.hips=bones[HumanBodyBones.Hips];ik.spine=bones[HumanBodyBones.Spine];ik.chest=bones.ContainsKey(HumanBodyBones.UpperChest)?bones[HumanBodyBones.UpperChest]:bones[HumanBodyBones.Chest];ik.head=bones[HumanBodyBones.Head];
+            root.AddComponent<MovementBodyPoseStream>();
             ik.leftArm=Limb(bones,HumanBodyBones.LeftUpperArm,HumanBodyBones.LeftLowerArm,HumanBodyBones.LeftHand);
             ik.rightArm=Limb(bones,HumanBodyBones.RightUpperArm,HumanBodyBones.RightLowerArm,HumanBodyBones.RightHand);
             ik.leftLeg=Limb(bones,HumanBodyBones.LeftUpperLeg,HumanBodyBones.LeftLowerLeg,HumanBodyBones.LeftFoot);

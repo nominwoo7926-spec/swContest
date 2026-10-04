@@ -5,8 +5,8 @@ PASS Binary session recording starts after calibration
 PASS Real skinned worker uses a valid Humanoid avatar
 PASS Spectator output is isolated from headset rendering
 PASS Avatar soles are aligned to the calibrated floor
-PASS Conveyor delivers and parks four FIFO parts
-PASS Full queue applies backpressure without instantiation
+PASS Conveyor and table park eight parts in one straight line
+PASS Supply continues beyond the former four-part backpressure limit
 PASS Simultaneous grips cannot own the same part twice
 PASS Removing the first item advances the next FIFO item
 PASS Left-hand work raises left shoulder, arm and wrist independently
@@ -26,8 +26,8 @@ PASS Right-hand work drives right-side scores
 PASS Right completion is recorded separately
 PASS Recent repetition history is isolated by hand
 PASS Repetition history expires after 60 seconds
-PASS Pool reuses instances and stays bounded at twelve
-PASS Queue capacity stays bounded throughout the task
+PASS Completed parts return to the reusable pool
+PASS Queue remains continuous instead of stopping at four parts
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS RULA produces a bounded full-body grand score

@@ -28,7 +28,10 @@ public static class QuestTaskSetup
     const string BaseScene="Assets/Factory/Scenes/SmartFactory.unity";
     const string Root="Assets/FactoryTask";
     static readonly Dictionary<string,Sprite> Sprites=new Dictionary<string,Sprite>();
-    static Material dark,steel,blue,green,amber;
+    public const int SlotCount=3;
+    // Facing +Z, centred between the pickup slot and the completion bin, ~35 cm from the table edge.
+    public static readonly Vector3 StandingPosition=new Vector3(2.52f,0,-3.8f);
+    static Material dark,steel,blue,green,amber,gray;
     static Mesh rounded;
 
     [MenuItem("Tools/Smart Factory/Quest Task/Setup or Repair Quest Task")]
@@ -52,29 +55,28 @@ public static class QuestTaskSetup
         var calibration=systems.gameObject.AddComponent<UserCalibration>();var task=systems.gameObject.AddComponent<XRGrabTaskTracker>();var estimator=systems.gameObject.AddComponent<BodyLoadEstimator>();
         spawner.prefab=CreatePartPrefab();spawner.queue=queue;spawner.poolSize=12;spawner.intervalSeconds=3.5f;
         spawner.spawnPoint=Point("Part_Spawn",systems,new Vector3(-5.15f,1.015f,-3.05f));
-        queue.slots=new Transform[4];
-        for(int i=0;i<4;i++)
+        // Belt -> short pickup table -> completion bin in one line, all within reach of a single standing spot.
+        queue.slots=new Transform[SlotCount];
+        for(int i=0;i<SlotCount;i++)
         {
-            queue.slots[i]=Point("Pickup_Slot_"+i,systems,new Vector3(3.25f-i*.4f,1.045f,-3.52f));
-            Box("Slot_Inlay_"+i,equipment,new Vector3(3.25f-i*.4f,1.043f,-3.52f),new Vector3(.30f,.006f,.32f),i==0?green:blue);
+            queue.slots[i]=Point("Pickup_Slot_"+i,systems,new Vector3(1.92f+i*.27f,1.045f,-3.05f));
+            Box("Slot_Inlay_"+i,equipment,new Vector3(1.92f+i*.27f,1.043f,-3.05f),new Vector3(.23f,.006f,.32f),steel);
         }
-        queue.approach=new[]{Point("Belt_End",systems,new Vector3(1.65f,1.015f,-3.05f)),Point("Queue_Entry",systems,new Vector3(1.85f,1.045f,-3.52f))};
-        Box("Pickup_Table",equipment,new Vector3(2.7f,.99f,-3.49f),new Vector3(1.95f,.1f,.81f),steel,true);
-        foreach(float x in new[]{1.85f,3.55f})foreach(float z in new[]{-3.78f,-3.2f})Box("Pickup_Leg",equipment,new Vector3(x,.47f,z),new Vector3(.075f,.94f,.075f),dark,true);
-        WorldSign(equipment,"Pickup",new Vector3(2.7f,.88f,-3.91f),.38f,.12f);
-        for(int i=0;i<3;i++)WorldSign(equipment,i==0?"One":i==1?"Three":"Five",new Vector3(2.3f+i*.4f,.72f,-3.91f),.3f,.11f);
-        var done=New("Completion_Box",equipment);done.position=new Vector3(4.22f,0,-3.86f);
-        Box("Box_Base",done,new Vector3(0,.77f,0),new Vector3(.88f,.08f,.78f),green,true);
-        foreach(float x in new[]{-.43f,.43f})Box("Box_Side",done,new Vector3(x,.95f,0),new Vector3(.035f,.35f,.78f),green,true);
-        foreach(float z in new[]{-.38f,.38f})Box("Box_End",done,new Vector3(0,.95f,z),new Vector3(.86f,.35f,.035f),green,true);
+        queue.approach=new[]{Point("Belt_End",systems,new Vector3(1.65f,1.015f,-3.05f)),Point("Queue_Entry",systems,new Vector3(1.78f,1.045f,-3.05f))};
+        Box("Pickup_Table",equipment,new Vector3(2.1525f,.99f,-3.05f),new Vector3(.935f,.1f,.81f),steel,true);
+        foreach(float x in new[]{1.75f,2.555f})foreach(float z in new[]{-3.34f,-2.76f})Box("Pickup_Leg",equipment,new Vector3(x,.47f,z),new Vector3(.075f,.94f,.075f),dark,true);
+        var done=New("Completion_Box",equipment);done.position=new Vector3(3.12f,0,-3.15f);
+        Box("Box_Base",done,new Vector3(0,.77f,0),new Vector3(.88f,.08f,.78f),gray,true);
+        foreach(float x in new[]{-.43f,.43f})Box("Box_Side",done,new Vector3(x,.95f,0),new Vector3(.035f,.35f,.78f),gray,true);
+        foreach(float z in new[]{-.38f,.38f})Box("Box_End",done,new Vector3(0,.95f,z),new Vector3(.86f,.35f,.035f),gray,true);
         foreach(float x in new[]{-.3f,.3f})foreach(float z in new[]{-.25f,.25f})Box("Box_Stand",done,new Vector3(x,.37f,z),new Vector3(.05f,.74f,.05f),steel,true);
         WorldSign(done,"Complete",new Vector3(0,.96f,-.405f),.4f,.13f);
         var trigger=New("Completion_Interior",done).gameObject.AddComponent<BoxCollider>();trigger.isTrigger=true;trigger.center=new Vector3(0,1.02f,0);trigger.size=new Vector3(.795f,.46f,.69f);
-        task.completionVolume=trigger;task.recoveryPoint=Point("Recovery_Pad",systems,new Vector3(3.35f,1.25f,-3.62f));
+        task.completionVolume=trigger;task.recoveryPoint=Point("Recovery_Pad",systems,new Vector3(2.2f,1.25f,-3.2f));
         // Give static surfaces sensible collision without importing thousands of mesh colliders.
         foreach(var t in production.GetComponentsInChildren<Transform>(true))if(t.name=="Upper_Belt")AddBox(t.gameObject);
         foreach(var t in GameObject.Find("Workstations").GetComponentsInChildren<Transform>(true))if(t.name=="Thick_Metal_Worktop")AddBox(t.gameObject);
-        calibration.standingPoint=Point("Standing_Position",systems,new Vector3(3.55f,0,-4.2f));
+        calibration.standingPoint=Point("Standing_Position",systems,StandingPosition);
         var rig=New("XR_Rig",root);rig.position=calibration.standingPoint.position;
         var head=New("Tracked_Head",rig);head.localPosition=new Vector3(0,1.65f,0);
         var camera=head.gameObject.AddComponent<Camera>();camera.tag="MainCamera";camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.allowHDR=false;camera.allowMSAA=true;
@@ -99,7 +101,7 @@ public static class QuestTaskSetup
         // Texture property animation cannot use a statically batched belt renderer.
         GameObjectUtility.SetStaticEditorFlags(controller.beltRenderer.gameObject,StaticEditorFlags.ContributeGI|StaticEditorFlags.ReflectionProbeStatic);
         var rula=systems.gameObject.AddComponent<RulaAssessment>();rula.tracking=tracking;rula.calibration=calibration;rula.task=task;
-        BuildPanel(head,estimator,task,calibration,controller,rula);
+        BuildPanel(equipment,estimator,task,calibration,controller,rula);
         AvatarDemoSetup.Attach(root);
         rula.avatar=root.GetComponentInChildren<FullBodyAvatarIK>();
         EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.ImportAsset(ScenePath);AssetDatabase.SaveAssets();
@@ -128,6 +130,7 @@ public static class QuestTaskSetup
         Sprites["Circle"]=AssetDatabase.LoadAssetAtPath<Sprite>(circlePath);
         dark=Material("Task_Dark",new Color(.055f,.09f,.13f),.3f);steel=Material("Task_Steel",new Color(.65f,.72f,.77f),.55f);
         blue=Material("Part_1kg_Blue",new Color(.10f,.49f,.8f),.25f);amber=Material("Part_3kg_Amber",new Color(.95f,.58f,.11f),.2f);green=Material("Task_Complete_Green",new Color(.13f,.55f,.4f),.2f);
+        gray=Material("Task_Factory_Gray",new Color(.38f,.4f,.42f),.35f);
         rounded=AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Factory/Meshes/B_0.380_0.220_0.350_0.025.asset");
     }
     static Material Material(string name,Color color,float metallic)
@@ -185,15 +188,14 @@ public static class QuestTaskSetup
     {
         var result=new NumberReadout{digits=new Image[3]};for(int i=0;i<3;i++){result.digits[i]=Image(name+"_"+i,parent,pos+new Vector2((i-1)*height*.55f,0),new Vector2(height*.8f,height),Color.white,"Digit0");result.digits[i].enabled=i==2;}return result;
     }
-    static void BuildPanel(Transform head,BodyLoadEstimator estimator,XRGrabTaskTracker task,UserCalibration calibration,ConveyorController controller,RulaAssessment rula)
+    static void BuildPanel(Transform worldParent,BodyLoadEstimator estimator,XRGrabTaskTracker task,UserCalibration calibration,ConveyorController controller,RulaAssessment rula)
     {
         // 510×420 패널 — 왼쪽 신체 도식 + 오른쪽 진행 바 차트
-        var go=new GameObject("Relative_Load_Panel",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(head,false);go.transform.localPosition=new Vector3(-.52f,.20f,1.08f);go.transform.localRotation=Quaternion.Euler(0,-21,0);go.transform.localScale=Vector3.one*.001f;
+        var go=new GameObject("Relative_Load_Panel",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(worldParent,false);go.transform.position=StandingPosition+new Vector3(1.15f,1.48f,.45f);go.transform.rotation=Quaternion.LookRotation(StandingPosition+new Vector3(0,1.48f,0)-go.transform.position,Vector3.up);go.transform.localScale=Vector3.one*.001f;
         var rect=go.GetComponent<RectTransform>();rect.sizeDelta=new Vector2(510,420);go.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
         Image("Panel_Background",rect,Vector2.zero,new Vector2(510,420),new Color(.018f,.032f,.055f,.97f));
 
         // ── 상단 타이틀 + 평균 바 ────────────────────────────────────
-        Image("Title",rect,new Vector2(-60,157),new Vector2(262,55),Color.white,"Title");
         Image("AvgBar_Bg",rect,new Vector2(162,158),new Vector2(140,18),new Color(.07f,.11f,.18f));
         var avgBar=Image("AvgBar_Fill",rect,new Vector2(162,158),new Vector2(140,18),BodyLoadVisualizer.ColorFor(0));
         avgBar.type=UnityEngine.UI.Image.Type.Filled;avgBar.fillMethod=UnityEngine.UI.Image.FillMethod.Horizontal;avgBar.fillAmount=0;
@@ -309,9 +311,8 @@ public static class QuestTaskSetup
         var tracker=Object.FindFirstObjectByType<XRGrabTaskTracker>();
         if(tracker==null)errors.Add("Missing task tracker");else
         {
-            if(tracker.queue.slots.Length!=4)errors.Add("Queue must have four slots");
+            if(tracker.queue.slots.Length!=SlotCount)errors.Add("Queue must have "+SlotCount+" aligned base slots");
             if(tracker.pool.prefab==null||tracker.completionVolume==null||tracker.tracking.actions==null)errors.Add("Missing task reference");
-            if(tracker.pool.poolSize>16)errors.Add("Unbounded pool");
         }
         if(scene.GetRootGameObjects().Count(g=>g.name=="Quest_Task")!=1)errors.Add("Duplicate task root");
         if(Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).Count(c=>c.enabled&&c.targetTexture==null)!=1)errors.Add("Expected only one active first-person output camera");
@@ -321,7 +322,7 @@ public static class QuestTaskSetup
             foreach(var renderer in go.GetComponents<Renderer>())foreach(var material in renderer.sharedMaterials)if(material==null||material.shader==null||!material.shader.isSupported)errors.Add("Broken material: "+go.name);
         }
         foreach(var graphic in Object.FindObjectsByType<Graphic>(FindObjectsSortMode.None))if(graphic.material==null||graphic.material.shader==null||graphic.material.shader.name=="Hidden/InternalErrorShader"||!graphic.material.shader.isSupported)errors.Add("Broken UI material: "+graphic.name);
-        string report="Scene: "+ScenePath+"\nTask roots: "+scene.GetRootGameObjects().Count(g=>g.name=="Quest_Task")+"\nQueue: 4 FIFO reservations (includes in-transit parts)\nPool: 12\nWeight variants: 1, 3, 5 kg\nRuntime camera: tracked first person only\nLightmaps preserved: "+LightmapSettings.lightmaps.Length+"\nErrors: "+errors.Count+"\n"+string.Join("\n",errors);
+        string report="Scene: "+ScenePath+"\nTask roots: "+scene.GetRootGameObjects().Count(g=>g.name=="Quest_Task")+"\nQueue: continuous FIFO, eight aligned positions per layer\nPool: 12 initial, expands in batches of 6\nWeight variants: 1, 3, 5 kg\nRuntime camera: tracked first person only\nLightmaps preserved: "+LightmapSettings.lightmaps.Length+"\nErrors: "+errors.Count+"\n"+string.Join("\n",errors);
         Directory.CreateDirectory("Documentation/QuestTask");File.WriteAllText("Documentation/QuestTask/SceneValidation.txt",report);Debug.Log(report);if(errors.Count>0)throw new Exception("Quest task validation failed.");
     }
     public static void SetupBatch(){Setup();Setup();Validate();QuestTaskVerification.RunMathChecks();Capture();}
@@ -369,8 +370,16 @@ public static class QuestTaskEditorBridge
     static void Poll()
     {
         if(EditorApplication.timeSinceStartup<nextPoll||EditorApplication.isCompiling||EditorApplication.isUpdating)return;nextPoll=EditorApplication.timeSinceStartup+1;
-        const string path="Temp/FactoryTask.command";if(!File.Exists(path))return;string command=File.ReadAllText(path).Trim();File.Delete(path);
-        try{switch(command){case "setup":QuestTaskSetup.Setup();break;case "open":QuestTaskSetup.Open();break;case "validate":QuestTaskSetup.Validate();break;case "playtests":QuestTaskSetup.PlayTests();break;case "capture":QuestTaskSetup.Capture();break;case "build":QuestTaskSetup.BuildAndroid();break;default:throw new Exception("Unknown local editor command");}File.WriteAllText("Temp/FactoryTask.result",command+" OK");}
+        const string movementRequest="Temp/FactoryTask.movement.request";
+        if(File.Exists(movementRequest))
+        {
+            File.Delete(movementRequest);
+            try{AvatarDemoSetup.ConfigureMovementBodyTracking();QuestTaskSetup.Setup();File.WriteAllText("Temp/FactoryTask.result","movement OK");}
+            catch(Exception error){File.WriteAllText("Temp/FactoryTask.result",error.ToString());Debug.LogException(error);}
+            return;
+        }
+        const string path="Temp/FactoryTask.command";if(!File.Exists(path))return;string command=File.ReadAllText(path).Trim().TrimStart('\uFEFF');File.Delete(path);
+        try{switch(command){case "setup":QuestTaskSetup.Setup();break;case "movement":AvatarDemoSetup.ConfigureMovementBodyTracking();QuestTaskSetup.Setup();break;case "open":QuestTaskSetup.Open();break;case "validate":QuestTaskSetup.Validate();break;case "playtests":QuestTaskSetup.PlayTests();break;case "capture":QuestTaskSetup.Capture();break;case "build":QuestTaskSetup.BuildAndroid();break;default:throw new Exception("Unknown local editor command");}File.WriteAllText("Temp/FactoryTask.result",command+" OK");}
         catch(Exception error){File.WriteAllText("Temp/FactoryTask.result",error.ToString());Debug.LogException(error);}
     }
 }

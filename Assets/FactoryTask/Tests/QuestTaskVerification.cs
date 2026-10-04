@@ -65,7 +65,7 @@ public sealed class QuestTaskVerification : MonoBehaviour
         RunMathChecks();tracking=FindFirstObjectByType<XRTrackingProvider>();calibration=FindFirstObjectByType<UserCalibration>();task=FindFirstObjectByType<XRGrabTaskTracker>();estimator=FindFirstObjectByType<BodyLoadEstimator>();controller=FindFirstObjectByType<ConveyorController>();
         avatar=FindFirstObjectByType<FullBodyAvatarIK>();recording=FindFirstObjectByType<VRSessionRecorder>();spectator=FindFirstObjectByType<SpectatorCameraController>();
         if(recording!=null)recording.autoRecord=false;
-        head=new Vector3(3.55f,1.65f,-4.2f);leftRest=head+new Vector3(-.2f,-.65f,-.05f);rightRest=head+new Vector3(.2f,-.65f,-.05f);
+        head=new Vector3(2.52f,1.65f,-3.8f);leftRest=head+new Vector3(-.2f,-.65f,-.05f);rightRest=head+new Vector3(.2f,-.65f,-.05f);
         Pose(leftRest,rightRest);float limit=Time.realtimeSinceStartup+8;
         while(!calibration.IsCalibrated&&Time.realtimeSinceStartup<limit)yield return null;
         Pass(calibration.IsCalibrated,"Stable tracked head and hands automatically calibrate");
@@ -83,11 +83,10 @@ public sealed class QuestTaskVerification : MonoBehaviour
         }
         Time.timeScale=4;
         float until=Time.time+50;
-        while((task.queue.Count<4||task.queue.Front.State!=PartState.Waiting)&&Time.time<until)yield return null;
-        yield return new WaitForSeconds(12);
-        Pass(task.queue.Count==4&&task.queue.Front.State==PartState.Waiting,"Conveyor delivers and parks four FIFO parts");
+        while((task.queue.Count<8||task.queue.Front.State!=PartState.Waiting)&&Time.time<until)yield return null;
+        Pass(task.queue.Count>=8&&task.queue.Front.State==PartState.Waiting,"Conveyor and table park eight parts in one straight line");
         int supplied=task.pool.SpawnedCount;yield return new WaitForSeconds(4);
-        Pass(task.pool.SpawnedCount==supplied,"Full queue applies backpressure without instantiation");
+        Pass(task.pool.SpawnedCount>supplied&&task.queue.Count>8,"Supply continues beyond the former four-part backpressure limit");
         ConveyorPart first=task.queue.Front;Vector3 firstPosition=first.Body.position;
         Pose(firstPosition,firstPosition,true,true);yield return new WaitForSeconds(.18f);
         Pass(task.LeftHeld==first&&first.Holder==HandSide.Left&&task.RightHeld!=first,"Simultaneous grips cannot own the same part twice");
@@ -109,7 +108,7 @@ public sealed class QuestTaskVerification : MonoBehaviour
         float heldTime=first.HoldSeconds;Pose(working,rightRest,true,false,false);yield return new WaitForSeconds(.5f);
         Pass(first.State==PartState.Held&&Mathf.Abs(first.HoldSeconds-heldTime)<.1f,"Tracking loss freezes held part and hold timer");
         Pose(working,rightRest,true);yield return new WaitForSeconds(.15f);
-        Pose(new Vector3(3.55f,.3f,-4.7f),rightRest,false);yield return new WaitForSeconds(1);
+        Pose(new Vector3(2.52f,.3f,-4.3f),rightRest,false);yield return new WaitForSeconds(1);
         Pass(first.State==PartState.Dropped&&task.CompletedTotal==0,"Floor drop does not count as completion");
         Pose(first.Body.position,rightRest,true);yield return new WaitForSeconds(.18f);
         Pass(task.LeftHeld==first,"Dropped part can be grabbed again");
@@ -132,8 +131,8 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Pass(estimator.RecentCount(HandSide.Left,Time.time)==1&&estimator.RecentCount(HandSide.Right,Time.time)==1,"Recent repetition history is isolated by hand");
         Pass(estimator.RecentCount(HandSide.Left,Time.time+61)==0,"Repetition history expires after 60 seconds");
         yield return new WaitForSeconds(4);
-        Pass(task.pool.ReusedCount>0&&task.pool.Parts.Length==12,"Pool reuses instances and stays bounded at twelve");
-        Pass(task.queue.Count<=4,"Queue capacity stays bounded throughout the task");
+        Pass(task.pool.ReusedCount>0,"Completed parts return to the reusable pool");
+        Pass(task.queue.Count>4,"Queue remains continuous instead of stopping at four parts");
         tracking.Simulate(head+new Vector3(0,-.22f,.23f),leftRest,rightRest);yield return new WaitForSeconds(1.5f);
         Pass(estimator.Score(6)>25,"Tracked head lowering and forward movement raise torso load in Play mode");
         if(recording!=null)
