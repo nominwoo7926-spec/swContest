@@ -55,18 +55,24 @@ namespace FactoryTask
             int postureA=LookupA(ua,la,wrist,twist);
 
             Vector3 headLocal=Quaternion.Inverse(avatar.chest.rotation)*avatar.head.forward;
-            float neckFlex=Mathf.Abs(Mathf.Atan2(headLocal.y,headLocal.z)*Mathf.Rad2Deg);
-            int neck=neckFlex<10?1:neckFlex<=20?2:neckFlex<=45?3:4;
+            // RULA Neck: flexion (0-10=1, 10-20=2, >20=3), extension=4 (McAtamney & Corlett, 1993)
+            float neckPitch=-Mathf.Atan2(headLocal.y,headLocal.z)*Mathf.Rad2Deg;
+            int neck=neckPitch<0?4:neckPitch<=10?1:neckPitch<=20?2:3;
             if(Mathf.Abs(headLocal.x)>.17f)neck++;
             Vector3 trunk=(avatar.chest.position-avatar.hips.position).normalized;
-            float trunkFlex=Vector3.Angle(up,Vector3.ProjectOnPlane(trunk,right));int trunkScore=trunkFlex<5?1:trunkFlex<=20?2:trunkFlex<=60?3:4;
+            Vector3 trunkSagittal=Vector3.ProjectOnPlane(trunk,right).normalized;
+            // RULA Trunk: pitch > 0 is flexion, pitch < 0 is extension.
+            // Neutral (±10° sensor tolerance)=1, Flexion (10-20=2, 20-60=3, >60=4), Extension (<-10°)=2 (McAtamney & Corlett, 1993)
+            float trunkPitch=Mathf.Atan2(Vector3.Dot(trunkSagittal,forward),Vector3.Dot(trunkSagittal,up))*Mathf.Rad2Deg;
+            int trunkScore=trunkPitch<-10f?2:trunkPitch<=10f?1:trunkPitch<=20f?2:trunkPitch<=60f?3:4;
             if(Mathf.Abs(Vector3.Dot(trunk,right))>.17f)trunkScore++;
             bool grounded=Mathf.Abs(avatar.LeftSoleY-calibration.standingPoint.position.y)<.05f&&Mathf.Abs(avatar.RightSoleY-calibration.standingPoint.position.y)<.05f;
             int legs=grounded?1:2,postureB=LookupB(neck,trunkScore,legs);
             var held=task.Held(side);float weight=held!=null?held.weightKg:0;
             // RULA muscle-use adjustment: static posture >1 minute or repeated action >4/min.
             int muscle=(held!=null&&held.HoldSeconds>=60)||(task.estimator!=null&&task.estimator.RecentCount(side,Time.time)>4)?1:0;
-            int force=weight<2?0:weight<=10?(held!=null&&held.HoldSeconds>=60?2:1):3;
+            // RULA force load: <2kg=0, 2-10kg intermittent=1, 2-10kg static/repeated or >10kg intermittent=2, >10kg static/repeated=3
+            int force=weight<2f?0:weight<=10f?(muscle==1?2:1):(muscle==1?3:2);
             int a=Mathf.Clamp(postureA+muscle+force,1,8),b=Mathf.Clamp(postureB+muscle+force,1,7),grand=Combine(a,b);
             return new RulaSideResult{valid=true,upperArm=ua,lowerArm=la,wrist=wrist,wristTwist=twist,postureA=postureA,scoreA=a,neck=neck,trunk=trunkScore,legs=legs,postureB=postureB,scoreB=b,muscleUse=muscle,forceLoad=force,grandScore=grand,actionLevel=grand<=2?1:grand<=4?2:grand<=6?3:4,confidence=.65f};
         }
