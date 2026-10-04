@@ -46,6 +46,12 @@ namespace FactoryTask
 
             float s = (side == HandSide.Left) ? -1f : 1f;
 
+            // Setup builds the hand in the editor and saves it into the scene. At runtime the
+            // non-serialized 'built' flag is false again, so re-bind the saved model instead of
+            // building a second hand on top of it.
+            var existing = transform.Find("Human_Hand_Model");
+            if (existing != null) { BindExisting(existing, s); return; }
+
             // Hand root container
             var modelContainer = new GameObject("Human_Hand_Model");
             modelContainer.transform.SetParent(transform, false);
@@ -146,6 +152,21 @@ namespace FactoryTask
             if (thumbTip != null)
             {
                 thumbTip.localRotation = Quaternion.Euler(15f + (currentCurl * thumbTipAngle), 0, 0);
+            }
+        }
+
+        void BindExisting(Transform model, float s)
+        {
+            string[] names = { "Index", "Middle", "Ring", "Pinky" };
+            thumbRestRotation = Quaternion.Euler(-25f, s * 40f, s * 35f);
+            palm = model.Find("Palm");
+            thumbBase = model.Find("Thumb_Root");
+            thumbTip = thumbBase != null ? thumbBase.Find("Thumb_Proximal/Thumb_Distal") : null;
+            for (int i = 0; i < 4; i++)
+            {
+                baseRestRotations[i] = Quaternion.Euler(12f, s * (i - 1.5f) * 2f, 0);
+                fingerBases[i] = model.Find(names[i] + "_Finger");
+                fingerTips[i] = fingerBases[i] != null ? fingerBases[i].Find(names[i] + "_Proximal/" + names[i] + "_Distal") : null;
             }
         }
 
