@@ -51,6 +51,20 @@ namespace FactoryTask
             record=actions.FindAction("RecordToggle",false);
             reportBtn=actions.FindAction("ReportButton",false);
             leftThumb=actions.FindAction("LeftThumbstick",false);
+            EnsureHandVisualizers();
+        }
+        void EnsureHandVisualizers()
+        {
+            if (leftHand != null && leftHand.GetComponent<VRHandVisualizer>() == null)
+            {
+                var vis = leftHand.gameObject.AddComponent<VRHandVisualizer>();
+                vis.side = HandSide.Left; vis.tracking = this;
+            }
+            if (rightHand != null && rightHand.GetComponent<VRHandVisualizer>() == null)
+            {
+                var vis = rightHand.gameObject.AddComponent<VRHandVisualizer>();
+                vis.side = HandSide.Right; vis.tracking = this;
+            }
         }
         void OnEnable() { actions.Enable(); Application.onBeforeRender += ReadPoses; }
         void OnDisable() { Application.onBeforeRender -= ReadPoses; actions.Disable(); }

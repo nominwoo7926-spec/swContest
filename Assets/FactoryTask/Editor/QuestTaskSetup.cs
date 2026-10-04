@@ -83,8 +83,12 @@ public static class QuestTaskSetup
         tracking.leftHand.localPosition=new Vector3(-.2f,1,-.05f);tracking.rightHand.localPosition=new Vector3(.2f,1,-.05f);
         foreach(var hand in new[]{tracking.leftHand,tracking.rightHand})
         {
-            Box("Grip_Marker",hand,Vector3.zero,new Vector3(.036f,.075f,.042f),hand==tracking.leftHand?blue:amber);
-            Box("Thumb_Marker",hand,new Vector3(0,.04f,.016f),new Vector3(.044f,.018f,.05f),steel);
+            var vis = hand.gameObject.AddComponent<VRHandVisualizer>();
+            vis.side = (hand == tracking.leftHand) ? HandSide.Left : HandSide.Right;
+            vis.tracking = tracking;
+            vis.handMaterial = (hand == tracking.leftHand) ? blue : amber;
+            vis.accentMaterial = steel;
+            vis.BuildHand();
         }
         tracking.actions=CreateActions();calibration.tracking=tracking;calibration.task=task;
         task.tracking=tracking;task.calibration=calibration;task.queue=queue;task.pool=spawner;task.estimator=estimator;
