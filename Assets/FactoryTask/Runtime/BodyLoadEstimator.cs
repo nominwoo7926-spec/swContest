@@ -21,6 +21,7 @@ namespace FactoryTask
         public float Score(int index)=>displayed[index];
         public void ApplyRecordedScores(float[] scores){for(int i=0;i<7;i++)displayed[i]=Mathf.Clamp(scores[i],0,100);}
         public float Average {get{float total=0;for(int i=0;i<7;i++)total+=displayed[i];return total/7;}}
+        public float Max{get{float m=0;for(int i=0;i<7;i++)m=Mathf.Max(m,displayed[i]);return m;}}
         public float SessionAvgScore(int index)=>sessionSampleCount>0?Mathf.Clamp(sessionSum[index]/sessionSampleCount,0,100):0f;
         public float SessionAverage{get{float t=0;for(int i=0;i<7;i++)t+=SessionAvgScore(i);return t/7;}}
         public float SessionSeconds=>sessionSampleCount*0.05f;

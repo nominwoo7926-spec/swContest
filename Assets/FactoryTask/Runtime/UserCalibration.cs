@@ -8,6 +8,8 @@ namespace FactoryTask
         public XRTrackingProvider tracking;
         public Transform standingPoint;
         public XRGrabTaskTracker task;
+        [Tooltip("시점이 너무 낮으면 양수(+), 너무 높으면 음수(-) 입력 (단위: 미터)")]
+        public float heightAdjust = 0f;
         public bool IsCalibrated { get; private set; }
         public float Progress => Mathf.Clamp01(steadySeconds/2);
         public Vector3 BaselineHead { get; private set; }
@@ -23,6 +25,19 @@ namespace FactoryTask
         void Update() { Tick(Time.unscaledDeltaTime); }
         public void Tick(float dt)
         {
+            // 캘리브레이션 완료 후 왼쪽 조이스틱 위/아래로 시점 높이 실시간 조절 (0.4m/s)
+            // BaselineHead도 같이 이동해야 부하 기준점이 올바르게 유지됨
+            if(IsCalibrated)
+            {
+                float thumb=tracking.LeftThumbY;
+                if(Mathf.Abs(thumb)>0.3f)
+                {
+                    float delta=thumb*0.4f*dt;
+                    heightAdjust=Mathf.Clamp(heightAdjust+delta,-1f,1f);
+                    tracking.origin.position+=Vector3.up*delta;
+                    BaselineHead+=Vector3.up*delta;
+                }
+            }
             if(!tracking.Recalibrate){resetHeld=0;resetConsumed=false;}
             else if(!resetConsumed&&(task==null||task.HeldWeight==0))resetHeld+=dt;
             if(resetHeld>=1&&!resetConsumed){ResetCalibration();resetConsumed=true;}
@@ -46,7 +61,7 @@ namespace FactoryTask
             if(localForward.sqrMagnitude<.1f)return;
             tracking.origin.rotation=standingPoint.rotation*Quaternion.Inverse(Quaternion.LookRotation(localForward,Vector3.up));
             Vector3 horizontal=new Vector3(localHead.x,0,localHead.z);
-            tracking.origin.position=standingPoint.position-tracking.origin.rotation*horizontal;
+            tracking.origin.position=standingPoint.position-tracking.origin.rotation*horizontal+Vector3.up*heightAdjust;
             BaselineHead=tracking.origin.TransformPoint(localHead);Forward=standingPoint.forward;Right=standingPoint.right;
             ShoulderHalfWidth=Mathf.Clamp(stature*.115f,.15f,.24f);ShoulderDrop=Mathf.Clamp(stature*.14f,.18f,.29f);IsCalibrated=true;
         }

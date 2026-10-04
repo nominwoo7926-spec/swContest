@@ -27,19 +27,25 @@ namespace FactoryTask
         public NumberReadout weight,average;
         public Sprite[] glyphs;
         public Image calibrationProgress;
+        public Image[] regionBars;   // 각 신체 부위 가로 진행 바 (fill image)
+        public Image averageBar;     // 상단 전체 평균 바
+
+        [Header("벨트 속도 (선택 — 미연결 시 무시됨)")]
+        public ConveyorController conveyor;
+        public Image beltSpeedBar;
+        public NumberReadout beltSpeedPct;
 
         [Header("확장 HUD (선택 — 미연결 시 무시됨)")]
-        public ErgonomicReport report;        // B버튼 홀드 진행률 소스
-        public VRSessionRecorder recorder;    // 세션 시간 소스
-        public Image reportHoldProgress;      // fillAmount 0→1 (B버튼 홀드)
-        public NumberReadout sessionMinutes;  // 세션 분
-        public NumberReadout sessionSeconds;  // 세션 초
-        public NumberReadout completedCount;  // 완료 부품 수
-        // 평균 부하 ≥67 이면 alpha를 sin파로 점멸시킬 오버레이 이미지
+        public ErgonomicReport report;
+        public VRSessionRecorder recorder;
+        public Image reportHoldProgress;
+        public NumberReadout sessionMinutes;
+        public NumberReadout sessionSeconds;
+        public NumberReadout completedCount;
         public Image dangerOverlay;
 
         float nextUpdate;
-        float dangerFlashTick;  // 0.1 s 단위 누적 (sin 입력값)
+        float dangerFlashTick;
 
         public static Color ColorFor(float score)
         {
@@ -54,8 +60,23 @@ namespace FactoryTask
             // ── 기존 HUD ──────────────────────────────────────────────
             calibrationProgress.fillAmount=calibration.IsCalibrated?1:calibration.Progress;
             calibrationProgress.color=calibration.IsCalibrated?ColorFor(0):new Color(.4f,.7f,1);
-            for(int i=0;i<7;i++){regions[i].color=ColorFor(estimator.Score(i));regionNumbers[i].Set(Mathf.RoundToInt(estimator.Score(i)),glyphs);}
-            weight.Set(Mathf.RoundToInt(task.HeldWeight),glyphs);average.Set(Mathf.RoundToInt(estimator.Average),glyphs);
+            float avg=estimator.Average;
+            for(int i=0;i<7;i++)
+            {
+                float s=estimator.Score(i);
+                Color col=ColorFor(s);
+                regions[i].color=col;
+                regionNumbers[i].Set(Mathf.RoundToInt(s),glyphs);
+                if(regionBars!=null&&i<regionBars.Length&&regionBars[i]!=null)
+                {
+                    regionBars[i].fillAmount=s/100f;
+                    Color bc=col;
+                    bc.a=s>=67f?0.65f+Mathf.Abs(Mathf.Sin(Time.unscaledTime*5f))*0.35f:1f;
+                    regionBars[i].color=bc;
+                }
+            }
+            if(averageBar!=null){averageBar.fillAmount=avg/100f;averageBar.color=ColorFor(avg);}
+            weight.Set(Mathf.RoundToInt(task.HeldWeight),glyphs);average.Set(Mathf.RoundToInt(avg),glyphs);
 
             // ── 확장 HUD ──────────────────────────────────────────────
 
@@ -73,6 +94,15 @@ namespace FactoryTask
 
             // 완료 부품 수
             if(completedCount!=null)completedCount.Set(task.CompletedTotal,glyphs);
+
+            // 벨트 속도 바 (ratio=1→녹색/가득, ratio<1→주황·빨강/줄어듦)
+            if(conveyor!=null&&beltSpeedBar!=null)
+            {
+                float ratio=conveyor.CurrentSpeed/ConveyorController.FixedSpeed;
+                beltSpeedBar.fillAmount=ratio;
+                beltSpeedBar.color=ColorFor((1f-ratio)*200f);
+                if(beltSpeedPct!=null)beltSpeedPct.Set(Mathf.RoundToInt(ratio*100f),glyphs);
+            }
 
             // 위험 부하 경고 점멸 (평균 ≥67 일 때 오버레이 alpha를 sin파로)
             if(dangerOverlay!=null)

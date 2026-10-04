@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR;
+using InputDevice = UnityEngine.XR.InputDevice;
+using XRCommonUsages = UnityEngine.XR.CommonUsages;
 
 namespace FactoryTask
 {
@@ -21,9 +23,20 @@ namespace FactoryTask
         public bool ExternalPlayback { get; private set; }
         public bool RecordToggle { get; private set; }
         public bool ReportButton { get; private set; }
-        InputAction record, reportBtn;
+        public float LeftThumbY
+        {
+            get
+            {
+                if(leftThumb!=null)return leftThumb.ReadValue<Vector2>().y;
+                if(cachedLeftDevice.isValid&&cachedLeftDevice.TryGetFeatureValue(XRCommonUsages.primary2DAxis,out var v))return v.y;
+                return 0f;
+            }
+        }
+        InputAction record, reportBtn, leftThumb;
         InputAction hp, hr, ht, lp, lr, lt, lg, rp, rr, rt, rg, reset;
         readonly List<XRInputSubsystem> subsystems = new List<XRInputSubsystem>(2);
+        readonly List<InputDevice> leftDevices = new List<InputDevice>(2);
+        InputDevice cachedLeftDevice;
         float nextOriginCheck;
         bool floorOrigin;
         public bool IsFloorOrigin => floorOrigin;
@@ -37,6 +50,7 @@ namespace FactoryTask
             rp=actions.FindAction("RightPosition",true); rr=actions.FindAction("RightRotation",true); rt=actions.FindAction("RightTracked",true); rg=actions.FindAction("RightGrip",true); reset=actions.FindAction("Recalibrate",true);
             record=actions.FindAction("RecordToggle",false);
             reportBtn=actions.FindAction("ReportButton",false);
+            leftThumb=actions.FindAction("LeftThumbstick",false);
         }
         void OnEnable() { actions.Enable(); Application.onBeforeRender += ReadPoses; }
         void OnDisable() { Application.onBeforeRender -= ReadPoses; actions.Disable(); }
@@ -56,6 +70,8 @@ namespace FactoryTask
                     if (subsystems[i].GetTrackingOriginMode()!=TrackingOriginModeFlags.Floor) subsystems[i].TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor);
                     floorOrigin=subsystems[i].GetTrackingOriginMode()==TrackingOriginModeFlags.Floor;
                 }
+                InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.Left|InputDeviceCharacteristics.Controller,leftDevices);
+                if(leftDevices.Count>0)cachedLeftDevice=leftDevices[0];
             }
             ReadPoses(); LeftGrip=lg.IsPressed();RightGrip=rg.IsPressed();Recalibrate=reset.IsPressed();
             RecordToggle=record!=null&&record.IsPressed();

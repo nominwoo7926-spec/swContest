@@ -4,12 +4,12 @@
     "maps": [
         {
             "name": "FactoryQuest",
-            "id": "b20a5e7f-60b7-4146-8681-8b994ebf019e",
+            "id": "17b2ba7f-98a4-4be0-ad42-5af99770c144",
             "actions": [
                 {
                     "name": "HeadPosition",
                     "type": "Value",
-                    "id": "f4a598d5-c1cb-486b-901c-640441d66e05",
+                    "id": "847441a0-3312-4992-8ac4-fcd8e504eb5f",
                     "expectedControlType": "Vector3",
                     "processors": "",
                     "interactions": "",
@@ -19,7 +19,7 @@
                 {
                     "name": "HeadRotation",
                     "type": "Value",
-                    "id": "33564b96-c464-406c-8714-cdf3970c1a98",
+                    "id": "2227837f-b33b-46a8-a368-3ffe18d45cea",
                     "expectedControlType": "Quaternion",
                     "processors": "",
                     "interactions": "",
@@ -29,7 +29,7 @@
                 {
                     "name": "HeadTracked",
                     "type": "Button",
-                    "id": "aff8a10f-b2f6-4223-b540-e76d16f28c8b",
+                    "id": "90d57aaa-a9f5-4818-a045-565cbb0a1437",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -39,7 +39,7 @@
                 {
                     "name": "LeftPosition",
                     "type": "Value",
-                    "id": "397683fe-95a8-4109-aa8b-60c8c579b397",
+                    "id": "41ba8298-594a-415a-9575-ddceedba9f70",
                     "expectedControlType": "Vector3",
                     "processors": "",
                     "interactions": "",
@@ -49,7 +49,7 @@
                 {
                     "name": "LeftRotation",
                     "type": "Value",
-                    "id": "294121c6-2df3-4295-82a9-58593c294d40",
+                    "id": "d0795a5f-9792-440c-9212-a335e867b1d3",
                     "expectedControlType": "Quaternion",
                     "processors": "",
                     "interactions": "",
@@ -59,7 +59,7 @@
                 {
                     "name": "LeftTracked",
                     "type": "Button",
-                    "id": "512ae122-ed31-48e8-b85e-ebbfe9faa573",
+                    "id": "74153106-d2b7-4adc-a559-63fa865da036",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -69,7 +69,7 @@
                 {
                     "name": "LeftGrip",
                     "type": "Button",
-                    "id": "9cc91406-5d49-4f3c-a34d-b080f0eae70b",
+                    "id": "e0c20284-7a75-4977-aadc-7ef99e4b6e8a",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -79,7 +79,7 @@
                 {
                     "name": "RightPosition",
                     "type": "Value",
-                    "id": "670487ed-2a0d-4cee-b785-689cdd1e8b2c",
+                    "id": "28568f8b-67b9-47a6-918c-b888f94c63ca",
                     "expectedControlType": "Vector3",
                     "processors": "",
                     "interactions": "",
@@ -89,7 +89,7 @@
                 {
                     "name": "RightRotation",
                     "type": "Value",
-                    "id": "0006f2ed-fb2a-4f70-8cff-ddcd78310eab",
+                    "id": "48cdfe97-83db-4d65-b950-f34ce38f4247",
                     "expectedControlType": "Quaternion",
                     "processors": "",
                     "interactions": "",
@@ -99,7 +99,7 @@
                 {
                     "name": "RightTracked",
                     "type": "Button",
-                    "id": "b46f6919-a0c3-489f-b739-21baafa74b88",
+                    "id": "312a91a4-cbe9-4287-90c3-0cadbc7eaffa",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -109,7 +109,7 @@
                 {
                     "name": "RightGrip",
                     "type": "Button",
-                    "id": "fe8243f0-f1c4-4724-b2e5-c98d8a90a4fd",
+                    "id": "2eee3d38-af34-4ef7-8865-d8676e657234",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -119,7 +119,7 @@
                 {
                     "name": "Recalibrate",
                     "type": "Button",
-                    "id": "3089f2b8-1786-4bf4-bd18-5870069c96e1",
+                    "id": "b6819eeb-eab0-4663-a480-183e9ee41d3d",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -129,7 +129,7 @@
                 {
                     "name": "ReportButton",
                     "type": "Button",
-                    "id": "eae71f0d-8c8d-4cbf-a318-ff3c8ffd26b6",
+                    "id": "b8e1302b-a7c0-49a7-9da9-addcdadf88e5",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -137,9 +137,19 @@
                     "priority": 0
                 },
                 {
+                    "name": "LeftThumbstick",
+                    "type": "Value",
+                    "id": "7532eb7b-a4e9-4875-9986-dc19ccf95c0f",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true,
+                    "priority": 0
+                },
+                {
                     "name": "RecordToggle",
                     "type": "Button",
-                    "id": "c5926202-f40c-472d-9204-8b2fd9d06e04",
+                    "id": "971f8781-77f5-4eac-a7e5-fe7ca4c22aac",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -150,7 +160,7 @@
             "bindings": [
                 {
                     "name": "",
-                    "id": "24e8122f-337b-4430-abdd-d5cea0a4e020",
+                    "id": "77b14902-14ab-460d-95d0-182abdfb140c",
                     "path": "<XRHMD>/centerEyePosition",
                     "interactions": "",
                     "processors": "",
@@ -161,7 +171,7 @@
                 },
                 {
                     "name": "",
-                    "id": "544c896a-73ba-4495-ba61-722a0aedcb67",
+                    "id": "07c4d906-6b93-49fa-856a-ac3075c758ed",
                     "path": "<XRHMD>/centerEyeRotation",
                     "interactions": "",
                     "processors": "",
@@ -172,7 +182,7 @@
                 },
                 {
                     "name": "",
-                    "id": "da812ce0-eaab-4b64-9aa8-be16ac91ce55",
+                    "id": "ff59ba50-b0bd-424f-873c-ca37453afc41",
                     "path": "<XRHMD>/isTracked",
                     "interactions": "",
                     "processors": "",
@@ -183,7 +193,7 @@
                 },
                 {
                     "name": "",
-                    "id": "1a90a9b9-6c44-43b9-957f-67085fd86446",
+                    "id": "01b2c478-f436-4fe2-aeed-c8c0b1cacc3c",
                     "path": "<XRController>{LeftHand}/devicePosition",
                     "interactions": "",
                     "processors": "",
@@ -194,7 +204,7 @@
                 },
                 {
                     "name": "",
-                    "id": "019c575b-2c7e-417f-acfb-120508eb258a",
+                    "id": "532f65d1-bfda-4a5e-a216-11c340a4d709",
                     "path": "<XRController>{LeftHand}/deviceRotation",
                     "interactions": "",
                     "processors": "",
@@ -205,7 +215,7 @@
                 },
                 {
                     "name": "",
-                    "id": "65c3b404-425c-469a-8e4e-389b9d0cd67f",
+                    "id": "8f19c149-4fdb-4e4b-a0b9-6917c6302a72",
                     "path": "<XRController>{LeftHand}/isTracked",
                     "interactions": "",
                     "processors": "",
@@ -216,7 +226,7 @@
                 },
                 {
                     "name": "",
-                    "id": "dd7e724b-c153-4f51-948f-7ffe8ea27ada",
+                    "id": "2e3cf6b9-1518-4e4d-8326-4793b9078d79",
                     "path": "<XRController>{LeftHand}/gripPressed",
                     "interactions": "",
                     "processors": "",
@@ -227,7 +237,7 @@
                 },
                 {
                     "name": "",
-                    "id": "b383f964-57d8-4ba4-94d9-f164fb761cd9",
+                    "id": "03538373-b9eb-434c-9ff5-7442c35d662e",
                     "path": "<XRController>{RightHand}/devicePosition",
                     "interactions": "",
                     "processors": "",
@@ -238,7 +248,7 @@
                 },
                 {
                     "name": "",
-                    "id": "66f9a107-8e25-4452-adaa-f6701dfa441f",
+                    "id": "a0ad9581-2f62-4ec8-b5b2-977dfb199971",
                     "path": "<XRController>{RightHand}/deviceRotation",
                     "interactions": "",
                     "processors": "",
@@ -249,7 +259,7 @@
                 },
                 {
                     "name": "",
-                    "id": "f3e8865e-cb83-432b-91ff-9686a46009a4",
+                    "id": "baaba5d8-4eea-4976-8fee-ce65b37f9edb",
                     "path": "<XRController>{RightHand}/isTracked",
                     "interactions": "",
                     "processors": "",
@@ -260,7 +270,7 @@
                 },
                 {
                     "name": "",
-                    "id": "37d74722-ac33-4121-abd3-d8ffa7f10ba8",
+                    "id": "4c85210f-fe91-4c10-8b34-cd27534ee80a",
                     "path": "<XRController>{RightHand}/gripPressed",
                     "interactions": "",
                     "processors": "",
@@ -271,7 +281,7 @@
                 },
                 {
                     "name": "",
-                    "id": "51ad7003-67e6-4274-aca8-a513dffaf06a",
+                    "id": "7a336eae-e7ce-4ab3-a958-a444fa14e9a4",
                     "path": "<XRController>{LeftHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
@@ -282,7 +292,7 @@
                 },
                 {
                     "name": "",
-                    "id": "5cd17026-f9b6-42ee-86a5-7918b299085d",
+                    "id": "97932ffe-1ad3-4562-9c7b-3d97f7a33694",
                     "path": "<XRController>{RightHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
@@ -293,7 +303,18 @@
                 },
                 {
                     "name": "",
-                    "id": "875d8d21-04c4-4072-a5b8-d1142a93ae03",
+                    "id": "c772c010-05a8-45c9-8a9e-801ca0eb14ba",
+                    "path": "<XRController>{LeftHand}/primary2DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "LeftThumbstick",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "12f58adf-3ed8-4a51-97f0-e201f0982833",
                     "path": "<XRController>{RightHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
