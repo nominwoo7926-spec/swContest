@@ -49,8 +49,9 @@ namespace FactoryTask
         void Awake()
         {
             bool movement=bodySource!=null&&bodyRetargeter!=null;
-            if(bodyRetargeter!=null)bodyRetargeter.enabled=movement;
-            if(avatar!=null)avatar.enabled=!movement;
+            if(bodyRetargeter!=null){avatarRootScale=bodyRetargeter.transform.localScale;bodyRetargeter.enabled=movement;}
+            // Start on IK until the first valid body pose arrives.
+            if(avatar!=null)avatar.enabled=true;
         }
 
         sealed class Frame
@@ -68,9 +69,29 @@ namespace FactoryTask
             public readonly NativeTransform[] bodyTPose = new NativeTransform[MovementBodyPoseStream.JointCount];
             public Frame(int count){pp=new Vector3[count];pq=new Quaternion[count];state=new byte[count];kind=new byte[count];}
         }
+        // Live driver choice: Movement retargeting while Quest body tracking delivers a valid pose,
+        // otherwise (permission denied, start failure, tracking loss) the three-point IK avatar.
+        float bodyInvalidSeconds=1;
+        Vector3 avatarRootScale=Vector3.one;
+        void UpdateLiveDriver()
+        {
+            if(bodySource==null||bodyRetargeter==null||avatar==null)return;
+            bodyInvalidSeconds=bodySource.IsPoseValid()?0:bodyInvalidSeconds+Time.unscaledDeltaTime;
+            bool useIk=bodyInvalidSeconds>.5f;
+            if(!bodyRetargeter.enabled)bodyRetargeter.enabled=true;
+            if(avatar.enabled!=useIk){avatar.enabled=useIk;if(useIk)avatar.ResetPlant();}
+            if(useIk)RestoreAvatarScale();
+        }
+        // CharacterRetargeter hides its character (root scale 0) until a valid body pose arrives,
+        // and only rescales it while it is applying poses. The IK avatar must stay visible.
+        void RestoreAvatarScale()
+        {
+            if(bodyRetargeter!=null&&bodyRetargeter.transform.localScale!=avatarRootScale)bodyRetargeter.transform.localScale=avatarRootScale;
+        }
         void Update()
         {
             if(IsPlayback){TickPlayback(Time.unscaledDeltaTime);return;}
+            UpdateLiveDriver();
             if(paused)return;
             if(autoRecord&&!autoStarted&&calibration.IsCalibrated){autoStarted=true;StartRecording();}
             if(!tracking.RecordToggle){toggleHeld=0;toggleConsumed=false;}
@@ -146,7 +167,9 @@ namespace FactoryTask
                 fileVersion=reader.ReadInt32();
                 if(fileVersion!=LegacyVersion&&fileVersion!=Version)throw new InvalidDataException("Unsupported Factory session version");
                 capacity=reader.ReadInt32();int rate=reader.ReadInt32();pool.Initialize();
-                if(capacity!=pool.Parts.Length||capacity<1||capacity>16||rate!=Rate)throw new InvalidDataException("Session pool/version differs from this scene");
+                // Sessions recorded with a smaller pool still replay; the spare parts stay hidden.
+                if(capacity>pool.Parts.Length||capacity<1||capacity>16||rate!=Rate)throw new InvalidDataException("Session pool/version differs from this scene");
+                for(int i=capacity;i<pool.Parts.Length;i++)pool.Parts[i].ApplyRecordedState(PartState.Pooled,0,Vector3.zero,Quaternion.identity);
                 frameBytes=156+capacity*30+(fileVersion>=2?1+MovementBodyPoseStream.JointCount*TransformBytes*2:0);
                 if(reader.BaseStream.Length<HeaderBytes+frameBytes*2)throw new InvalidDataException("Session needs at least two complete frames");
                 long completeFrames=(reader.BaseStream.Length-HeaderBytes)/frameBytes;
@@ -224,8 +247,9 @@ namespace FactoryTask
             movementPlaybackActive=movement;
             if(bodyRetargeter!=null)bodyRetargeter.enabled=movement;
             if(avatar!=null)avatar.enabled=!movement;
+            if(!movement)RestoreAvatarScale();
         }
-        void ClosePlayback(){reader?.Dispose();reader=null;if(bodySource!=null)bodySource.EndReplay();movementPlaybackActive=false;if(bodyRetargeter!=null)bodyRetargeter.enabled=true;if(avatar!=null)avatar.enabled=bodyRetargeter==null;}
+        void ClosePlayback(){reader?.Dispose();reader=null;if(bodySource!=null)bodySource.EndReplay();movementPlaybackActive=false;bodyInvalidSeconds=1;if(bodyRetargeter!=null)bodyRetargeter.enabled=true;if(avatar!=null)avatar.enabled=true;}
         void OnApplicationPause(bool value){paused=value;if(value)StopRecording();else if(autoRecord&&!IsPlayback)autoStarted=false;}
         void OnDisable(){StopRecording();ClosePlayback();}
         void OnApplicationQuit(){StopRecording();ClosePlayback();}

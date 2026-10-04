@@ -7,12 +7,16 @@ namespace FactoryTask
     {
         public XRTrackingProvider tracking;
         public UserCalibration calibration;
-        public PickupQueue queue;
         public PartSpawner pool;
         public BoxCollider completionVolume;
         public Transform recoveryPoint;
         public BodyLoadEstimator estimator;
         public float gripReach = .16f;
+        // A held part kept this far from the hand (blocked by a table or another part) for longer
+        // than breakawaySeconds slips out of the grip. Brief lag from fast hand motion does not.
+        public float breakawayDistance = .3f, breakawaySeconds = .25f;
+        // Never-handled parts that fall off the line are cleared once they settle below this height.
+        public float floorHeight = .5f;
         public ConveyorPart LeftHeld { get; private set; }
         public ConveyorPart RightHeld { get; private set; }
         [SerializeField] int completedLeft,completedRight;
@@ -24,17 +28,24 @@ namespace FactoryTask
         public float HeldWeight => replay?replayWeight:(LeftHeld!=null?LeftHeld.weightKg:0)+(RightHeld!=null?RightHeld.weightKg:0);
         public void ApplyRecordedTask(float weight,int left,int right){replay=true;replayWeight=weight;completedLeft=left;completedRight=right;}
         bool leftWasPressed,rightWasPressed;
+        float leftStrain,rightStrain;
         void FixedUpdate(){Tick(Time.fixedDeltaTime);}
         public void Tick(float dt)
         {
             if(!calibration.IsCalibrated)return;
             if(!tracking.HeadTracked||!tracking.Focused){Freeze(LeftHeld,dt);Freeze(RightHeld,dt);return;}
-            ProcessHand(HandSide.Left,tracking.LeftGrip,ref leftWasPressed,dt);
-            ProcessHand(HandSide.Right,tracking.RightGrip,ref rightWasPressed,dt);
+            ProcessHand(HandSide.Left,tracking.LeftGrip,ref leftWasPressed,ref leftStrain,dt);
+            ProcessHand(HandSide.Right,tracking.RightGrip,ref rightWasPressed,ref rightStrain,dt);
             for(int i=0;i<pool.Parts.Length;i++)
             {
-                var part=pool.Parts[i];if(part.State!=PartState.Dropped)continue;
-                if(part.Body.position.y<-.3f)part.Recover(recoveryPoint.position);
+                var part=pool.Parts[i];if(!part.Free)continue;
+                if(part.Body.position.y<-.3f){part.Recover(recoveryPoint.position);continue;}
+                if(part.State==PartState.Conveying)
+                {
+                    part.FloorSeconds=part.Body.position.y<floorHeight?part.FloorSeconds+dt:0;
+                    if(part.FloorSeconds>=3)pool.Recycle(part);
+                    continue;
+                }
                 if(IsInside(part))part.InsideSeconds+=dt;else part.InsideSeconds=0;
                 if(part.InsideSeconds>=.2f)
                 {
@@ -45,33 +56,38 @@ namespace FactoryTask
             }
         }
         void Freeze(ConveyorPart part,float dt){if(part!=null)part.Follow(part.Body.position,part.Body.rotation,dt,false);}
-        void ProcessHand(HandSide side,bool pressed,ref bool wasPressed,float dt)
+        void ProcessHand(HandSide side,bool pressed,ref bool wasPressed,ref float strain,float dt)
         {
             var held=Held(side);var hand=tracking.Hand(side);
             if(!tracking.Tracked(side)){Freeze(held,dt);wasPressed=pressed;return;}
-            if(pressed&&!wasPressed&&held==null)TryGrab(side);
+            if(pressed&&!wasPressed&&held==null){TryGrab(side);strain=0;}
             held=Held(side);
             if(held!=null)
             {
                 held.Follow(hand.position,hand.rotation,dt,true);
-                if(!pressed){held.Release();if(side==HandSide.Left)LeftHeld=null;else RightHeld=null;}
+                strain=held.Separation>breakawayDistance?strain+dt:0;
+                if(!pressed||strain>breakawaySeconds)Drop(side);
             }
             wasPressed=pressed;
+        }
+        void Drop(HandSide side)
+        {
+            var held=Held(side);if(held==null)return;
+            held.Release();if(side==HandSide.Left)LeftHeld=null;else RightHeld=null;
         }
         public ConveyorPart Held(HandSide side)=>side==HandSide.Left?LeftHeld:RightHeld;
         public bool TryGrab(HandSide side)
         {
             if(!calibration.IsCalibrated||!tracking.AllTracked||Held(side)!=null||side==HandSide.None)return false;
-            Vector3 hand=tracking.Hand(side).position;ConveyorPart nearest=null;float best=gripReach*gripReach;
+            var hand=tracking.Hand(side);Vector3 position=hand.position;ConveyorPart nearest=null;float best=gripReach*gripReach;
             for(int i=0;i<pool.Parts.Length;i++)
             {
-                var part=pool.Parts[i];
-                if(part.State!=PartState.Dropped&&!queue.CanPick(part))continue;
-                float distance=(part.Shape.ClosestPoint(hand)-hand).sqrMagnitude;
+                var part=pool.Parts[i];if(!part.Free)continue;
+                float distance=(part.Shape.ClosestPoint(position)-position).sqrMagnitude;
                 if(distance<=best){nearest=part;best=distance;}
             }
-            if(nearest==null||!nearest.Grab(side,hand))return false;
-            queue.Remove(nearest);if(side==HandSide.Left)LeftHeld=nearest;else RightHeld=nearest;
+            if(nearest==null||!nearest.Grab(side,position,hand.rotation))return false;
+            if(side==HandSide.Left)LeftHeld=nearest;else RightHeld=nearest;
             return true;
         }
         public bool IsInside(ConveyorPart part)

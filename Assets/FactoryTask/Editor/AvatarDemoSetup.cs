@@ -81,6 +81,8 @@ public static class AvatarDemoSetup
         var ik=worker.GetComponent<FullBodyAvatarIK>();ik.tracking=tracking;ik.calibration=tracker.calibration;
         var bodySource=worker.GetComponent<MovementBodyPoseStream>();
         var bodyRetargeter=worker.GetComponent<CharacterRetargeter>();
+        var gripPose=worker.GetComponent<AvatarGripPose>();if(gripPose==null)gripPose=worker.AddComponent<AvatarGripPose>();
+        gripPose.avatar=ik;gripPose.task=tracker;gripPose.retargeter=bodyRetargeter;
         ik.modelRoot.position=tracker.calibration.standingPoint.position;
         worker.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
         var recorder=taskRoot.gameObject.AddComponent<VRSessionRecorder>();
@@ -96,7 +98,7 @@ public static class AvatarDemoSetup
         var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=43;camera.allowHDR=false;camera.allowMSAA=true;
         camera.cullingMask=~(1<<VrLayer);camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
-        camera.transform.position=new Vector3(.6f,2.3f,-5);camera.transform.LookAt(new Vector3(2.45f,1,-3.45f));
+        var standing=QuestTaskSetup.StandingPosition;camera.transform.position=standing+new Vector3(-2.15f,2.3f,-1.45f);camera.transform.LookAt(standing+new Vector3(.05f,1,.5f));
         string texturePath=Root+"/Generated/Spectator_1080p.renderTexture";
         var texture=AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
         if(texture==null){texture=new RenderTexture(1920,1080,24,RenderTextureFormat.ARGB32){name="Spectator_1080p",antiAliasing=2};AssetDatabase.CreateAsset(texture,texturePath);}

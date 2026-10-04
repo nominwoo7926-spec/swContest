@@ -1,7 +1,7 @@
 Scene: Assets/Factory/Scenes/SmartFactory_QuestTask.unity
 Task roots: 1
-Queue: continuous FIFO, eight aligned positions per layer
-Pool: 12 initial, expands in batches of 6
+Line: physics belt -> pickup table -> completion bin, no equipment overlaps
+Pool: 16 fixed, supply waits while the line is backed up
 Weight variants: 1, 3, 5 kg
 Runtime camera: tracked first person only
 Lightmaps preserved: 2

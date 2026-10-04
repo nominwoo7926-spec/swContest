@@ -27,12 +27,14 @@ namespace FactoryTask
             if (replaying || pose == null || tPose == null || pose.Length < JointCount || tPose.Length < JointCount)
                 return false;
 
+            // The SDK caches this frame's pose and hands the same Temp array to every caller
+            // (including CharacterRetargeter), so it must not be disposed here.
             var source = base.GetSkeletonPose();
             bool valid = base.IsPoseValid() && source.IsCreated && source.Length >= JointCount;
             if (valid)
                 for (int i = 0; i < JointCount; i++) pose[i] = source[i];
-            if (source.IsCreated) source.Dispose();
 
+            // Bind poses are a fresh TempJob allocation per call and are ours to release.
             var bind = base.GetSkeletonTPose();
             if (bind.IsCreated && bind.Length >= JointCount)
                 for (int i = 0; i < JointCount; i++) tPose[i] = bind[i];

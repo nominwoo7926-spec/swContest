@@ -37,7 +37,7 @@ namespace FactoryTask
         Vector3 leftFoot, rightFoot, smoothedRoot, bodyCorrection;
         Quaternion leftFootRotation, rightFootRotation;
         bool initialized, planted;
-        float leftCurl, rightCurl, smoothDrop, smoothForward, leftSoleOffset, rightSoleOffset;
+        float smoothDrop, smoothForward, leftSoleOffset, rightSoleOffset;
 
         void Awake() { Initialize(); }
         public void Initialize()
@@ -115,10 +115,7 @@ namespace FactoryTask
             leftLeg.end.rotation = leftFootRotation; rightLeg.end.rotation = rightFootRotation;
             ApplyArm(leftArm, tracking.leftHand, tracking.LeftTracked, -1);
             ApplyArm(rightArm, tracking.rightHand, tracking.RightTracked, 1);
-            leftCurl = Mathf.Lerp(leftCurl, tracking.LeftGrip ? 58 : 12, 1 - Mathf.Exp(-dt * 15));
-            rightCurl = Mathf.Lerp(rightCurl, tracking.RightGrip ? 58 : 12, 1 - Mathf.Exp(-dt * 15));
-            Curl(leftFingers, leftFingerAxes, leftCurl);
-            Curl(rightFingers, rightFingerAxes, rightCurl);
+            // Finger curl is applied afterwards by AvatarGripPose for both avatar drivers.
         }
         static void Replant(ref Vector3 anchor, Vector3 nominal, float dt)
         {
@@ -151,10 +148,6 @@ namespace FactoryTask
             Vector3 pole = arm.upper.position + calibration.Right * side * .22f + calibration.Forward * .42f - Vector3.up * .12f;
             SolveLimb(arm, wrist, pole);
             arm.end.rotation = target.rotation * arm.endRotationOffset;
-        }
-        static void Curl(Transform[] fingers, Vector3[] axes, float amount)
-        {
-            for (int i = 0; i < fingers.Length; i++) fingers[i].localRotation *= Quaternion.AngleAxis(amount, axes[i]);
         }
         public static void SolveLimb(AvatarLimb limb, Vector3 target, Vector3 pole, float maxStretch = 1f)
         {

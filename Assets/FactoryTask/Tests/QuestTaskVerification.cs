@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using FactoryTask;
 using UnityEditor;
 using UnityEngine;
@@ -60,12 +61,42 @@ public sealed class QuestTaskVerification : MonoBehaviour
     }
     void Pass(bool condition,string message){Require(condition,message);steps.Add("PASS "+message);}
     void Pose(Vector3 left,Vector3 right,bool lg=false,bool rg=false,bool tracked=true){tracking.Simulate(head,left,right,lg,rg,tracked);}
+    // The free part furthest along the line that has come off the belt onto the pickup table.
+    ConveyorPart ArrivedPart()
+    {
+        float tableStart=GameObject.Find("Pickup_Table").GetComponent<Collider>().bounds.min.x;
+        return task.pool.Parts.Where(p=>p.State==PartState.Conveying&&p.Shape.bounds.center.x>tableStart).OrderByDescending(p=>p.Body.position.x).FirstOrDefault();
+    }
+    string worstPair="";
+    float MaxPartPenetration()
+    {
+        var active=task.pool.Parts.Where(p=>p.gameObject.activeInHierarchy).ToArray();float worst=0;worstPair="";
+        for(int i=0;i<active.Length;i++)for(int j=i+1;j<active.Length;j++)
+        {
+            var a=active[i].Shape;var b=active[j].Shape;
+            if(Physics.ComputePenetration(a,a.transform.position,a.transform.rotation,b,b.transform.position,b.transform.rotation,out _,out float depth)&&depth>worst)
+            {worst=depth;worstPair=active[i].State+"@"+a.transform.position.ToString("F2")+" / "+active[j].State+"@"+b.transform.position.ToString("F2");}
+        }
+        return worst;
+    }
+    // Move one hand through waypoints like a real carry, so the held part travels by physics.
+    IEnumerator Carry(bool left,bool grip,params Vector3[] path)
+    {
+        for(int i=1;i<path.Length;i++)
+            for(float t=0;t<1;t+=Time.deltaTime/.35f)
+            {
+                Vector3 p=Vector3.Lerp(path[i-1],path[i],t);
+                if(left)Pose(p,rightRest,grip);else Pose(leftRest,p,false,grip);
+                yield return null;
+            }
+        if(left)Pose(path[path.Length-1],rightRest,grip);else Pose(leftRest,path[path.Length-1],false,grip);
+    }
     IEnumerator Run()
     {
         RunMathChecks();tracking=FindFirstObjectByType<XRTrackingProvider>();calibration=FindFirstObjectByType<UserCalibration>();task=FindFirstObjectByType<XRGrabTaskTracker>();estimator=FindFirstObjectByType<BodyLoadEstimator>();controller=FindFirstObjectByType<ConveyorController>();
         avatar=FindFirstObjectByType<FullBodyAvatarIK>();recording=FindFirstObjectByType<VRSessionRecorder>();spectator=FindFirstObjectByType<SpectatorCameraController>();
         if(recording!=null)recording.autoRecord=false;
-        head=new Vector3(2.52f,1.65f,-3.8f);leftRest=head+new Vector3(-.2f,-.65f,-.05f);rightRest=head+new Vector3(.2f,-.65f,-.05f);
+        head=calibration.standingPoint.position+Vector3.up*1.65f;leftRest=head+new Vector3(-.2f,-.65f,-.05f);rightRest=head+new Vector3(.2f,-.65f,-.05f);
         Pose(leftRest,rightRest);float limit=Time.realtimeSinceStartup+8;
         while(!calibration.IsCalibrated&&Time.realtimeSinceStartup<limit)yield return null;
         Pass(calibration.IsCalibrated,"Stable tracked head and hands automatically calibrate");
@@ -83,23 +114,25 @@ public sealed class QuestTaskVerification : MonoBehaviour
         }
         Time.timeScale=4;
         float until=Time.time+50;
-        while((task.queue.Count<8||task.queue.Front.State!=PartState.Waiting)&&Time.time<until)yield return null;
-        Pass(task.queue.Count>=8&&task.queue.Front.State==PartState.Waiting,"Conveyor and table park eight parts in one straight line");
+        while(ArrivedPart()==null&&Time.time<until)yield return null;yield return new WaitForSeconds(1);
+        Pass(ArrivedPart()!=null&&!ArrivedPart().Body.isKinematic,"Belt friction pushes dynamic parts off the conveyor end onto the table");
         int supplied=task.pool.SpawnedCount;yield return new WaitForSeconds(4);
-        Pass(task.pool.SpawnedCount>supplied&&task.queue.Count>8,"Supply continues beyond the former four-part backpressure limit");
-        ConveyorPart first=task.queue.Front;Vector3 firstPosition=first.Body.position;
+        Pass(task.pool.SpawnedCount>supplied,"Supply continues while parts accumulate");
+        Pass(MaxPartPenetration()<.01f,"Parts collide instead of interpenetrating (max "+MaxPartPenetration().ToString("F3")+" m)");
+        ConveyorPart first=ArrivedPart();Vector3 firstPosition=first.Body.position;
         Pose(firstPosition,firstPosition,true,true);yield return new WaitForSeconds(.18f);
         Pass(task.LeftHeld==first&&first.Holder==HandSide.Left&&task.RightHeld!=first,"Simultaneous grips cannot own the same part twice");
-        Pass(task.queue.Front!=first&&task.queue.Front.weightKg==3,"Removing the first item advances the next FIFO item");
+        Pass(first.State==PartState.Held&&!first.Body.isKinematic&&!first.Body.useGravity,"Held part stays a dynamic body driven toward the hand");
         Vector3 working=head+new Vector3(-.5f,-.2f,.6f);Pose(working,rightRest,true);yield return new WaitForSeconds(3);
+        Pass(task.LeftHeld==first&&Vector3.Distance(first.Shape.ClosestPoint(tracking.leftHand.position),tracking.leftHand.position)<.06f,"Held part follows a fast hand move and stays seated in the palm");
         Pass(estimator.Score(0)>estimator.Score(1)+5&&estimator.Score(2)>estimator.Score(3)+5&&estimator.Score(4)>estimator.Score(5)+5,"Left-hand work raises left shoulder, arm and wrist independently");
         CaptureRunningTask();
         if(avatar!=null)
         {
             avatar.SolvePose(.033f);avatar.GetComponent<AvatarLoadHeatmap>().Apply();
             CaptureSpectator("Spectator_LeftWork");
-            Pass(avatar.LeftGripError<.20f,"Avatar preserves anatomical arm length and bounds unreachable controller error (error="+avatar.LeftGripError.ToString("F3")+" m)");
-            Pass(Vector3.Distance(avatar.leftGripAnchor.position,first.GripWorldPosition)<.20f,"Avatar palm remains close to the held part without stretching bones");
+            Pass(avatar.LeftGripError<.20f,"Avatar preserves anatomical arm length and bounds unreachable controller error (error="+avatar.LeftGripError.ToString("F3")+" m, root="+avatar.modelRoot.position.ToString("F2")+", shoulder="+avatar.leftArm.upper.position.ToString("F2")+", hand="+tracking.leftHand.position.ToString("F2")+")");
+            Pass(Vector3.Distance(avatar.leftGripAnchor.position,first.Shape.ClosestPoint(avatar.leftGripAnchor.position))<.20f,"Avatar palm remains close to the held part without stretching bones");
             float scale=avatar.modelRoot.localScale.x;
             Pass(Vector3.Distance(avatar.head.position+tracking.head.rotation*avatar.eyeOffset*scale,tracking.head.position)<.01f,"Avatar eye anchor follows the tracked HMD pose");
             var block=new MaterialPropertyBlock();avatar.GetComponent<AvatarLoadHeatmap>().surfaces[0].GetPropertyBlock(block);
@@ -108,31 +141,34 @@ public sealed class QuestTaskVerification : MonoBehaviour
         float heldTime=first.HoldSeconds;Pose(working,rightRest,true,false,false);yield return new WaitForSeconds(.5f);
         Pass(first.State==PartState.Held&&Mathf.Abs(first.HoldSeconds-heldTime)<.1f,"Tracking loss freezes held part and hold timer");
         Pose(working,rightRest,true);yield return new WaitForSeconds(.15f);
-        Pose(new Vector3(2.52f,.3f,-4.3f),rightRest,false);yield return new WaitForSeconds(1);
+        yield return Carry(true,true,working,head+new Vector3(0,-1.3f,-.45f));Pose(head+new Vector3(0,-1.3f,-.45f),rightRest,false);yield return new WaitForSeconds(1);
         Pass(first.State==PartState.Dropped&&task.CompletedTotal==0,"Floor drop does not count as completion");
         Pose(first.Body.position,rightRest,true);yield return new WaitForSeconds(.18f);
         Pass(task.LeftHeld==first,"Dropped part can be grabbed again");
         Vector3 inside=task.completionVolume.transform.TransformPoint(task.completionVolume.center);
-        Pose(inside,rightRest,true);yield return new WaitForSeconds(.3f);
+        Vector3 aboveBin=inside+Vector3.up*.45f;
+        yield return Carry(true,true,first.Body.position,head+new Vector3(0,-.25f,-.1f),aboveBin,inside);yield return new WaitForSeconds(1.5f);
         Pass(task.CompletedTotal==0,"A held part inside the box is not counted");
         float beforeRelease=estimator.Score(4);Pose(inside,rightRest,false);yield return new WaitForSeconds(.8f);
         Pass(task.CompletedLeft==1&&task.CompletedRight==0&&task.LeftHeld==null,"Released part inside completion box records left-hand task");
         Pass(first.State==PartState.Pooled||first.State==PartState.Conveying,"Completed part returns to the reusable pool");
         float afterRelease=estimator.Score(4);yield return new WaitForSeconds(2);
         Pass(estimator.Score(4)>0&&estimator.Score(4)<afterRelease&&afterRelease<beforeRelease,"Post-release load persists and decays gradually");
-        until=Time.time+10;while(task.queue.Front.State!=PartState.Waiting&&Time.time<until)yield return null;
-        var second=task.queue.Front;Pose(leftRest,second.Body.position,false,true);yield return new WaitForSeconds(.2f);
+        until=Time.time+15;while(ArrivedPart()==null&&Time.time<until)yield return null;
+        var second=ArrivedPart();Pose(leftRest,second.Body.position,false,true);yield return new WaitForSeconds(.2f);
         Pass(task.RightHeld==second,"Right Grip can pick the next part");
         Pose(leftRest,head+new Vector3(.55f,-.2f,.6f),false,true);yield return new WaitForSeconds(3);
         Pass(estimator.Score(1)>10&&estimator.Score(3)>10&&estimator.Score(5)>10,"Right-hand work drives right-side scores");
         if(avatar!=null){avatar.SolvePose(.033f);CaptureSpectator("Spectator_RightWork");}
-        Pose(leftRest,inside,false,true);yield return new WaitForSeconds(.2f);Pose(leftRest,inside);yield return new WaitForSeconds(.8f);
+        yield return Carry(false,true,head+new Vector3(.55f,-.2f,.6f),aboveBin,inside);yield return new WaitForSeconds(.2f);Pose(leftRest,inside);yield return new WaitForSeconds(.8f);
         Pass(task.CompletedRight==1&&task.CompletedTotal==2,"Right completion is recorded separately");
         Pass(estimator.RecentCount(HandSide.Left,Time.time)==1&&estimator.RecentCount(HandSide.Right,Time.time)==1,"Recent repetition history is isolated by hand");
         Pass(estimator.RecentCount(HandSide.Left,Time.time+61)==0,"Repetition history expires after 60 seconds");
         yield return new WaitForSeconds(4);
         Pass(task.pool.ReusedCount>0,"Completed parts return to the reusable pool");
-        Pass(task.queue.Count>4,"Queue remains continuous instead of stopping at four parts");
+        Pass(task.pool.Parts.Count(p=>p.State==PartState.Conveying)>3,"Line keeps supplying parts");
+        float accumulated=MaxPartPenetration();
+        Pass(accumulated<.01f,"Accumulated parts still do not interpenetrate (max "+accumulated.ToString("F3")+" m "+worstPair+")");
         tracking.Simulate(head+new Vector3(0,-.22f,.23f),leftRest,rightRest);yield return new WaitForSeconds(1.5f);
         Pass(estimator.Score(6)>25,"Tracked head lowering and forward movement raise torso load in Play mode");
         if(recording!=null)

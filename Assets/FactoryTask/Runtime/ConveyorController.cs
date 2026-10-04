@@ -5,13 +5,17 @@ namespace FactoryTask
     public sealed class ConveyorController : MonoBehaviour
     {
         public const float FixedSpeed = .38f;
-        public PickupQueue queue;
         public PartSpawner spawner;
         public UserCalibration calibration;
         public XRTrackingProvider tracking;
         public BodyLoadEstimator estimator;
         public XRGrabTaskTracker task;
         public Renderer beltRenderer;
+        // Frictionless static colliders the belt drives parts across (upper belt, end drum).
+        public Collider[] driveSurfaces;
+        public Vector3 beltDirection = Vector3.right;
+        // Maximum belt grip, like friction: a blocked part slips instead of being forced through.
+        public float beltGrip = 5f;
 
         // 최고 부위 부하 ≥50% 가 4초 지속되면 감속 시작, 5초에 걸쳐 45%까지 감소
         const float LoadThreshold = 50f;
@@ -41,13 +45,43 @@ namespace FactoryTask
 
         void FixedUpdate()
         {
-            if (!calibration.IsCalibrated || !tracking.HeadTracked || !tracking.Focused) return;
+            bool running = calibration.IsCalibrated && tracking.HeadTracked && tracking.Focused;
+            // A paused belt still grips its parts so they do not coast on the frictionless surface.
+            Drive(running ? CurrentSpeed : 0, Time.fixedDeltaTime);
+            if (!running) return;
             UpdateSpeed(Time.fixedDeltaTime);
-            queue.Tick(Time.fixedDeltaTime, CurrentSpeed);
             spawner.Tick(Time.fixedDeltaTime);
             if (beltRenderer == null) return;
             offset = Mathf.Repeat(offset - CurrentSpeed * Time.fixedDeltaTime * textureST.y / .9f, 1);
             textureST.w = offset; block.SetVector(BaseMapST, textureST); beltRenderer.SetPropertyBlock(block);
+        }
+
+        void Drive(float speed, float dt)
+        {
+            if (spawner.Parts == null || driveSurfaces == null || dt <= 0) return;
+            Vector3 along = beltDirection.normalized;
+            for (int i = 0; i < spawner.Parts.Length; i++)
+            {
+                var part = spawner.Parts[i];
+                if (!part.Free || part.Body.isKinematic || !OnBelt(part.Shape.bounds)) continue;
+                // Accelerate the contact toward belt velocity, limited like belt friction.
+                Vector3 slip = along * speed - part.Body.linearVelocity; slip.y = 0;
+                part.Body.AddForce(Vector3.ClampMagnitude(slip / dt, beltGrip), ForceMode.Acceleration);
+            }
+        }
+
+        bool OnBelt(Bounds part)
+        {
+            for (int i = 0; i < driveSurfaces.Length; i++)
+            {
+                Bounds belt = driveSurfaces[i].bounds;
+                if (part.min.y > belt.max.y + .02f || part.min.y < belt.max.y - .06f) continue;
+                // Any footprint still resting on the belt or drum is driven, so a part keeps moving
+                // until its trailing edge has left the drum and it sits fully on the table.
+                Vector3 c = part.center;
+                if (part.max.x >= belt.min.x && part.min.x <= belt.max.x && c.z >= belt.min.z && c.z <= belt.max.z) return true;
+            }
+            return false;
         }
 
         void UpdateSpeed(float dt)
