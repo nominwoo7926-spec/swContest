@@ -47,7 +47,9 @@ namespace FactoryTask
             float flex=Mathf.Atan2(Vector3.Dot(upper,forward),-Vector3.Dot(upper,up))*Mathf.Rad2Deg;
             int ua=flex < -20?2:flex<=20?1:flex<=45?2:flex<=90?3:4;
             if(Mathf.Abs(Vector3.Dot(upper,right))>.34f)ua++;
-            float elbow=Vector3.Angle(-upper,lower);int la=elbow>=60&&elbow<=100?1:2;
+            // RULA lower arm uses elbow FLEXION (straight arm = 0°): 60-100° = 1, otherwise 2.
+            // Angle(upper, lower) is the flexion angle; Angle(-upper, lower) would be the interior angle (180°-flexion).
+            float elbow=Vector3.Angle(upper,lower);int la=elbow>=60&&elbow<=100?1:2;
             Vector3 handForward=tracking.Hand(side).forward;
             float wristAngle=Vector3.Angle(lower,Vector3.ProjectOnPlane(handForward,right));int wrist=wristAngle<=5?1:wristAngle<=15?2:3;
             if(Mathf.Abs(Vector3.Dot(handForward,right))>.35f)wrist++;
