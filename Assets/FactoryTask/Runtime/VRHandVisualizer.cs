@@ -57,6 +57,10 @@ namespace FactoryTask
             modelContainer.transform.SetParent(transform, false);
             modelContainer.transform.localPosition = Vector3.zero;
             modelContainer.transform.localRotation = Quaternion.Euler(0, 0, s * 90f);
+            // The model is built with its palm on -Y, which put the palm (and the finger curl) on the
+            // outside of the controller grip. Mirroring Y turns the palm toward the grip, so the
+            // fingers close around the held part instead of bending backwards.
+            modelContainer.transform.localScale = PalmMirror;
 
             // 1. Wrist Cuff
             var wrist = CreatePrimitive(PrimitiveType.Cube, "Wrist", modelContainer.transform,
@@ -155,8 +159,11 @@ namespace FactoryTask
             }
         }
 
+        static readonly Vector3 PalmMirror = new Vector3(1, -1, 1);
+
         void BindExisting(Transform model, float s)
         {
+            model.localScale = PalmMirror;
             string[] names = { "Index", "Middle", "Ring", "Pinky" };
             thumbRestRotation = Quaternion.Euler(-25f, s * 40f, s * 35f);
             palm = model.Find("Palm");

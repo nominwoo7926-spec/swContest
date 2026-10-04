@@ -29,6 +29,10 @@ namespace FactoryTask
         public void ApplyRecordedTask(float weight,int left,int right){replay=true;replayWeight=weight;completedLeft=left;completedRight=right;}
         bool leftWasPressed,rightWasPressed;
         float leftStrain,rightStrain;
+        // Completed parts stay in the bin, oldest first; when it holds binCapacity the oldest fades out.
+        public int binCapacity = 6;
+        readonly System.Collections.Generic.List<ConveyorPart> binned=new System.Collections.Generic.List<ConveyorPart>();
+        public int BinnedCount => binned.Count;
         void FixedUpdate(){Tick(Time.fixedDeltaTime);}
         public void Tick(float dt)
         {
@@ -51,9 +55,19 @@ namespace FactoryTask
                 {
                     HandSide side=part.LastHand;if(side==HandSide.None)continue;
                     if(side==HandSide.Left)completedLeft++;else completedRight++;
-                    estimator.RecordCompletion(side,Time.time);pool.Recycle(part);
+                    estimator.RecordCompletion(side,Time.time);part.MarkCompleted();binned.Add(part);
                 }
             }
+            UpdateBin(dt);
+        }
+        void UpdateBin(float dt)
+        {
+            binned.RemoveAll(p=>p.State==PartState.Pooled);
+            // One part at a time, and only once the bin is full, so it reads as clearing space.
+            if(binned.Count==0)return;
+            var oldest=binned[0];
+            if(oldest.Vanishing||binned.Count>=binCapacity)oldest.BeginVanish();
+            if(oldest.TickVanish(dt))binned.RemoveAt(0);
         }
         void Freeze(ConveyorPart part,float dt){if(part!=null)part.Follow(part.Body.position,part.Body.rotation,dt,false);}
         void ProcessHand(HandSide side,bool pressed,ref bool wasPressed,ref float strain,float dt)

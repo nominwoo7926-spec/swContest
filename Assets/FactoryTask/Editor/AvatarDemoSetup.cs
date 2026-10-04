@@ -98,7 +98,9 @@ public static class AvatarDemoSetup
         var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=43;camera.allowHDR=false;camera.allowMSAA=true;
         camera.cullingMask=~(1<<VrLayer);camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
-        var standing=QuestTaskSetup.StandingPosition;camera.transform.position=standing+new Vector3(-2.15f,2.3f,-1.45f);camera.transform.LookAt(standing+new Vector3(.05f,1,.5f));
+        // Fixed observer across the table, facing the worker's front and looking down at about 45 degrees.
+        var standing=QuestTaskSetup.StandingPosition;var chest=standing+new Vector3(0,1.1f,0);
+        camera.transform.position=chest+new Vector3(0,2,2);camera.transform.LookAt(chest);
         string texturePath=Root+"/Generated/Spectator_1080p.renderTexture";
         var texture=AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
         if(texture==null){texture=new RenderTexture(1920,1080,24,RenderTextureFormat.ARGB32){name="Spectator_1080p",antiAliasing=2};AssetDatabase.CreateAsset(texture,texturePath);}

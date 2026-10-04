@@ -8,6 +8,8 @@ namespace FactoryTask
         public Transform spawnPoint;
         [Range(6, 16)] public int poolSize = 16;
         public float intervalSeconds = 3.5f;
+        // Every supplied part uses one variant: 0 = 1 kg / 17 cm, 1 = 3 kg / 20.5 cm, 2 = 5 kg / 24 cm.
+        [Range(0, 2)] public int partKind = 2;
         // Clear space required above the spawn point (largest part plus a gap) before supplying.
         public Vector3 clearance = new Vector3(.34f, .26f, .34f);
         public ConveyorPart[] Parts { get; private set; }
@@ -37,7 +39,7 @@ namespace FactoryTask
             // spawn point physically, so supply simply waits until a part is completed and recycled.
             for (int i = 0; i < Parts.Length; i++) if (Parts[i].State == PartState.Pooled)
             {
-                Parts[i].Supply(SpawnedCount % 3, spawnPoint.position, spawnPoint.rotation);
+                Parts[i].Supply(partKind, spawnPoint.position, spawnPoint.rotation);
                 if (used[i]) ReusedCount++; used[i] = true;
                 SpawnedCount++; countdown = intervalSeconds; return;
             }

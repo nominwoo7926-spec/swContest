@@ -29,7 +29,7 @@ public static class QuestTaskSetup
     const string Root="Assets/FactoryTask";
     static readonly Dictionary<string,Sprite> Sprites=new Dictionary<string,Sprite>();
     // The factory's adjustable workbench starts ~1.15 m past the conveyor frame, so table + bin fit in that gap.
-    const float TableGap=.02f,TableLength=.45f,BinGap=.03f,BinWidth=.6f;
+    const float TableGap=.02f,TableLength=.45f,BinGap=.03f,BinWidth=.6f,BinDepth=.85f;
     // Derived from the conveyor geometry during Setup; the user faces +Z toward the line.
     public static Vector3 StandingPosition{get;private set;}
     static Material dark,steel,blue,green,amber,gray;
@@ -58,22 +58,30 @@ public static class QuestTaskSetup
         // Give static surfaces sensible collision without importing thousands of mesh colliders.
         // The belt and end drum are frictionless: ConveyorController supplies the belt's grip.
         var conveyor=production.GetComponentsInChildren<Transform>(true).First(t=>t.name=="Conveyor_9m");
-        Collider beltSurface=null,drumSurface=null;
+        Renderer beltMesh=null,drumMesh=null;
         foreach(var t in production.GetComponentsInChildren<Transform>(true))
         {
-            if(t.name=="Upper_Belt")beltSurface=Solid(t.gameObject,beltFriction);
-            else if(t.name=="End_Drum")drumSurface=Solid(t.gameObject,beltFriction);
+            if(t.name=="Upper_Belt"||t.name=="End_Drum")
+            {
+                // Separate belt and drum boxes left a 2 mm step at the drum that parts caught on.
+                foreach(var old in t.GetComponents<Collider>())Object.DestroyImmediate(old);
+                if(t.name=="Upper_Belt")beltMesh=t.GetComponent<Renderer>();else drumMesh=t.GetComponent<Renderer>();
+            }
             else if(t.name=="Rail_Cap")Solid(t.gameObject,beltFriction);
         }
         foreach(var t in GameObject.Find("Workstations").GetComponentsInChildren<Transform>(true))if(t.name=="Thick_Metal_Worktop")AddBox(t.gameObject);
-        if(beltSurface==null||drumSurface==null)throw new InvalidOperationException("Upper_Belt or End_Drum was not found on Production_Line_A.");
-        controller.driveSurfaces=new[]{beltSurface,drumSurface};controller.beltDirection=Vector3.right;
+        if(beltMesh==null||drumMesh==null)throw new InvalidOperationException("Upper_Belt or End_Drum was not found on Production_Line_A.");
+        // One flat drive surface from the belt start over the end drum, at the belt's top height.
+        Bounds belt=beltMesh.bounds;float beltTop=belt.max.y,beltZ=belt.center.z,beltWidth=belt.size.z;
+        float surfaceStart=belt.min.x,surfaceEnd=drumMesh.bounds.max.x;
+        var surface=New("Belt_Drive_Surface",systems).gameObject.AddComponent<BoxCollider>();
+        surface.center=new Vector3((surfaceStart+surfaceEnd)*.5f,beltTop-.02f,beltZ);surface.size=new Vector3(surfaceEnd-surfaceStart,.04f,beltWidth);surface.sharedMaterial=beltFriction;
+        controller.driveSurfaces=new Collider[]{surface};controller.beltDirection=Vector3.right;
         // Belt -> pickup table -> completion bin in one line, starting just past the conveyor frame.
-        Bounds belt=beltSurface.bounds;float beltTop=belt.max.y,beltZ=belt.center.z,beltWidth=belt.size.z;
         float lineEnd=conveyor.GetComponentsInChildren<Renderer>(true).Max(r=>r.bounds.max.x);
         float tableStart=lineEnd+TableGap,tableTop=beltTop-.008f,tableEnd=tableStart+TableLength,tableX=tableStart+TableLength*.5f;
         // ~3 m of belt before the table: a backed-up line reaches the spawn point before the 16-part pool runs out.
-        spawner.prefab=CreatePartPrefab();spawner.poolSize=16;spawner.intervalSeconds=3.5f;
+        spawner.prefab=CreatePartPrefab();spawner.poolSize=16;spawner.intervalSeconds=3.5f;spawner.partKind=2;
         spawner.spawnPoint=Point("Part_Spawn",systems,new Vector3(lineEnd-3.2f,beltTop+.002f,beltZ));
         // The table sits a few millimetres below the drum so parts pushed off the belt drop onto it.
         Solid(Box("Pickup_Table",equipment,new Vector3(tableX,tableTop-.025f,beltZ),new Vector3(TableLength,.05f,beltWidth),steel,true),transferFriction);
@@ -83,18 +91,24 @@ public static class QuestTaskSetup
         foreach(float x in new[]{tableStart+.05f,tableEnd-.05f})foreach(float z in new[]{beltZ-beltWidth*.5f+.06f,beltZ+beltWidth*.5f-.06f})
             Box("Pickup_Leg",equipment,new Vector3(x,legHeight*.5f,z),new Vector3(.06f,legHeight,.06f),dark,true);
         var done=New("Completion_Box",equipment);done.position=new Vector3(tableEnd+BinGap+BinWidth*.5f,0,beltZ);
-        float wall=BinWidth*.5f-.0175f;
-        Solid(Box("Box_Base",done,new Vector3(0,.77f,0),new Vector3(BinWidth,.08f,.78f),gray,true),tableFriction);
-        foreach(float x in new[]{-wall,wall})Solid(Box("Box_Side",done,new Vector3(x,.95f,0),new Vector3(.035f,.35f,.78f),gray,true),tableFriction);
-        foreach(float z in new[]{-.3725f,.3725f})Solid(Box("Box_End",done,new Vector3(0,.95f,z),new Vector3(BinWidth-.07f,.35f,.035f),gray,true),tableFriction);
-        foreach(float x in new[]{-wall+.1f,wall-.1f})foreach(float z in new[]{-.25f,.25f})Box("Box_Stand",done,new Vector3(x,.365f,z),new Vector3(.05f,.73f,.05f),steel,true);
-        WorldSign(done,"Complete",new Vector3(0,.96f,-.405f),.4f,.13f);
-        var trigger=New("Completion_Interior",done).gameObject.AddComponent<BoxCollider>();trigger.isTrigger=true;trigger.center=new Vector3(0,1.02f,0);trigger.size=new Vector3(BinWidth-.085f,.46f,.69f);
+        // Inside fits 2 x 3 of the 24 cm parts on the floor, so six completed parts can rest in it.
+        float wall=BinWidth*.5f-.0175f,endWall=BinDepth*.5f-.0175f;
+        Solid(Box("Box_Base",done,new Vector3(0,.77f,0),new Vector3(BinWidth,.08f,BinDepth),gray,true),tableFriction);
+        foreach(float x in new[]{-wall,wall})Solid(Box("Box_Side",done,new Vector3(x,.95f,0),new Vector3(.035f,.35f,BinDepth),gray,true),tableFriction);
+        foreach(float z in new[]{-endWall,endWall})Solid(Box("Box_End",done,new Vector3(0,.95f,z),new Vector3(BinWidth-.07f,.35f,.035f),gray,true),tableFriction);
+        foreach(float x in new[]{-wall+.1f,wall-.1f})foreach(float z in new[]{-.28f,.28f})Box("Box_Stand",done,new Vector3(x,.365f,z),new Vector3(.05f,.73f,.05f),steel,true);
+        WorldSign(done,"Complete",new Vector3(0,.96f,-endWall-.035f),.4f,.13f);
+        // Tall enough that a part resting on top of another still counts as inside.
+        var trigger=New("Completion_Interior",done).gameObject.AddComponent<BoxCollider>();trigger.isTrigger=true;trigger.center=new Vector3(0,1.06f,0);trigger.size=new Vector3(BinWidth-.085f,.55f,BinDepth-.085f);
         task.completionVolume=trigger;task.recoveryPoint=Point("Recovery_Pad",systems,new Vector3(tableX,tableTop+.3f,beltZ-.1f));
         // Stand facing the line, between where parts arrive and the bin, ~35 cm back from the table edge.
         StandingPosition=new Vector3((tableX+done.position.x)*.5f,0,beltZ-beltWidth*.5f-.35f);
         calibration.standingPoint=Point("Standing_Position",systems,StandingPosition);
         var rig=New("XR_Rig",root);rig.position=calibration.standingPoint.position;
+        // No walking into the line (belt frame -> table -> bin) or onto the factory workbenches.
+        var guard=systems.gameObject.AddComponent<PlayAreaGuard>();guard.tracking=tracking;
+        var lineZone=new Bounds();lineZone.SetMinMax(new Vector3(belt.min.x,0,beltZ-beltWidth*.5f-.16f),new Vector3(done.position.x+BinWidth*.5f,2,beltZ+beltWidth*.5f+.16f));
+        guard.keepOut=new[]{lineZone}.Concat(GameObject.Find("Workstations").GetComponentsInChildren<Renderer>(true).Where(r=>r.name=="Thick_Metal_Worktop").Select(r=>r.bounds)).ToArray();
         var head=New("Tracked_Head",rig);head.localPosition=new Vector3(0,1.65f,0);
         var camera=head.gameObject.AddComponent<Camera>();camera.tag="MainCamera";camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.allowHDR=false;camera.allowMSAA=true;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;head.gameObject.AddComponent<AudioListener>();

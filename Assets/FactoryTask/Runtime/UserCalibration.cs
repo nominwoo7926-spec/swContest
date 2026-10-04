@@ -21,7 +21,8 @@ namespace FactoryTask
         Vector3 previousHead, previousLeft, previousRight, sum;
         Vector3 anchorHead,anchorLeft,anchorRight,anchorForward;
         float samples;
-        bool hadTracking,resetConsumed;
+        bool hadTracking,resetConsumed,placed;
+        const float MaxHeightAdjust=.25f;
         void Update() { Tick(Time.unscaledDeltaTime); }
         public void Tick(float dt)
         {
@@ -33,7 +34,9 @@ namespace FactoryTask
                 if(Mathf.Abs(thumb)>0.3f)
                 {
                     float delta=thumb*0.4f*dt;
-                    heightAdjust=Mathf.Clamp(heightAdjust+delta,-1f,1f);
+                    // Only a small eye-height correction: a large lift reads as standing on the table.
+                    float next=Mathf.Clamp(heightAdjust+delta,-MaxHeightAdjust,MaxHeightAdjust);
+                    delta=next-heightAdjust;heightAdjust=next;
                     tracking.origin.position+=Vector3.up*delta;
                     BaselineHead+=Vector3.up*delta;
                 }
@@ -42,6 +45,12 @@ namespace FactoryTask
             else if(!resetConsumed&&(task==null||task.HeldWeight==0))resetHeld+=dt;
             if(resetHeld>=1&&!resetConsumed){ResetCalibration();resetConsumed=true;}
             if(IsCalibrated)return;
+            // Put the user at the table straight away; the steady-pose calibration below refines it.
+            if(!placed&&tracking.HeadTracked&&tracking.IsFloorOrigin)
+            {
+                Vector3 localForward=Vector3.ProjectOnPlane(tracking.head.localRotation*Vector3.forward,Vector3.up);
+                if(localForward.sqrMagnitude>.01f){Align(tracking.head.localPosition,localForward.normalized);placed=true;}
+            }
             if(!tracking.AllTracked || !tracking.IsFloorOrigin){steadySeconds=samples=0;sum=Vector3.zero;hadTracking=false;return;}
             Vector3 h=tracking.head.position,l=tracking.leftHand.position,r=tracking.rightHand.position;
             if(!hadTracking){anchorHead=h;anchorLeft=l;anchorRight=r;anchorForward=tracking.head.forward;}
@@ -59,11 +68,16 @@ namespace FactoryTask
             Vector3 localHead=tracking.origin.InverseTransformPoint(meanHead);
             Vector3 localForward=Vector3.ProjectOnPlane(tracking.head.localRotation*Vector3.forward,Vector3.up).normalized;
             if(localForward.sqrMagnitude<.1f)return;
+            Align(localHead,localForward);
+            BaselineHead=tracking.origin.TransformPoint(localHead);Forward=standingPoint.forward;Right=standingPoint.right;
+            ShoulderHalfWidth=Mathf.Clamp(stature*.115f,.15f,.24f);ShoulderDrop=Mathf.Clamp(stature*.14f,.18f,.29f);IsCalibrated=true;
+        }
+        // Moves the rig so the given tracking-space head position stands on standingPoint, facing its forward.
+        void Align(Vector3 localHead,Vector3 localForward)
+        {
             tracking.origin.rotation=standingPoint.rotation*Quaternion.Inverse(Quaternion.LookRotation(localForward,Vector3.up));
             Vector3 horizontal=new Vector3(localHead.x,0,localHead.z);
             tracking.origin.position=standingPoint.position-tracking.origin.rotation*horizontal+Vector3.up*heightAdjust;
-            BaselineHead=tracking.origin.TransformPoint(localHead);Forward=standingPoint.forward;Right=standingPoint.right;
-            ShoulderHalfWidth=Mathf.Clamp(stature*.115f,.15f,.24f);ShoulderDrop=Mathf.Clamp(stature*.14f,.18f,.29f);IsCalibrated=true;
         }
         public Vector3 Shoulder(HandSide side)
         {

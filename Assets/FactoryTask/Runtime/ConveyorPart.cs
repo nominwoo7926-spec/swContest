@@ -28,7 +28,12 @@ namespace FactoryTask
         // Distance between where the hand wants the part and where physics allowed it to be.
         public float Separation { get; private set; }
         public float HalfHeight => transform.localScale.y*.5f;
-        public bool Free => State == PartState.Conveying || State == PartState.Waiting || State == PartState.Dropped;
+        // Counted parts rest in the bin until it is full; they are no longer picked up again.
+        public bool Completed { get; private set; }
+        public bool Vanishing => vanishTime >= 0;
+        public bool Free => !Completed && (State == PartState.Conveying || State == PartState.Waiting || State == PartState.Dropped);
+        const float VanishSeconds = .8f;
+        float vanishTime = -1, fullSize;
         Vector3 previousHand, attachStart, attachEnd;
         Quaternion attachRotation;
         float attachBlend;
@@ -61,6 +66,21 @@ namespace FactoryTask
             SetPhysical(true); Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero;
             State = PartState.Conveying; Holder = LastHand = HandSide.None;
             InsideSeconds = FloorSeconds = HoldSeconds = TravelMetres = Separation = 0; wasTracked = false;
+            Completed = false; vanishTime = -1; fullSize = size;
+        }
+        public void MarkCompleted() { Completed = true; }
+        public void BeginVanish() { if (!Vanishing) vanishTime = 0; }
+        // Shrinks away while staying physical, so gravity keeps it settled and parts resting on it
+        // ease down as it goes.
+        // Returns true once the part has been returned to the pool.
+        public bool TickVanish(float deltaTime)
+        {
+            if (!Vanishing) return false;
+            vanishTime += deltaTime;
+            float k = 1 - Mathf.SmoothStep(0, 1, vanishTime / VanishSeconds);
+            if (k <= .02f) { ReturnToPool(); return true; }
+            transform.localScale = Vector3.one * fullSize * k;
+            return false;
         }
         void SetPhysical(bool value)
         {
@@ -117,6 +137,7 @@ namespace FactoryTask
         {
             Initialize(); SetPhysical(false); Holder = LastHand = HandSide.None;
             State = PartState.Pooled; InsideSeconds = FloorSeconds = HoldSeconds = TravelMetres = Separation = 0;
+            Completed = false; vanishTime = -1;
             gameObject.SetActive(false);
         }
         public void Recover(Vector3 safePosition)

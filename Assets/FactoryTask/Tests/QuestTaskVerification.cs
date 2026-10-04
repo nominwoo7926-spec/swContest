@@ -151,7 +151,7 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Pass(task.CompletedTotal==0,"A held part inside the box is not counted");
         float beforeRelease=estimator.Score(4);Pose(inside,rightRest,false);yield return new WaitForSeconds(.8f);
         Pass(task.CompletedLeft==1&&task.CompletedRight==0&&task.LeftHeld==null,"Released part inside completion box records left-hand task");
-        Pass(first.State==PartState.Pooled||first.State==PartState.Conveying,"Completed part returns to the reusable pool");
+        Pass(first.Completed&&!first.Free&&task.BinnedCount==1,"Completed part stays in the bin and cannot be re-counted");
         float afterRelease=estimator.Score(4);yield return new WaitForSeconds(2);
         Pass(estimator.Score(4)>0&&estimator.Score(4)<afterRelease&&afterRelease<beforeRelease,"Post-release load persists and decays gradually");
         until=Time.time+15;while(ArrivedPart()==null&&Time.time<until)yield return null;
@@ -165,7 +165,7 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Pass(estimator.RecentCount(HandSide.Left,Time.time)==1&&estimator.RecentCount(HandSide.Right,Time.time)==1,"Recent repetition history is isolated by hand");
         Pass(estimator.RecentCount(HandSide.Left,Time.time+61)==0,"Repetition history expires after 60 seconds");
         yield return new WaitForSeconds(4);
-        Pass(task.pool.ReusedCount>0,"Completed parts return to the reusable pool");
+        Pass(task.BinnedCount==2&&task.pool.Parts.All(p=>!p.gameObject.activeSelf||p.weightKg==5),"Both completed parts rest in the bin; every part is the single 5 kg size");
         Pass(task.pool.Parts.Count(p=>p.State==PartState.Conveying)>3,"Line keeps supplying parts");
         float accumulated=MaxPartPenetration();
         Pass(accumulated<.01f,"Accumulated parts still do not interpenetrate (max "+accumulated.ToString("F3")+" m "+worstPair+")");
