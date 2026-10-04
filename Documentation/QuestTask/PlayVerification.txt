@@ -1,16 +1,18 @@
 PASSED
 PASS Stable tracked head and hands automatically calibrate
 PASS Standing origin and baseline are aligned to task
+PASS RULA assessment is wired to the tracked avatar
 PASS Binary session recording starts after calibration
 PASS Real skinned worker uses a valid Humanoid avatar
 PASS Spectator output is isolated from headset rendering
+PASS Avatar soles are aligned to the calibrated floor
 PASS Conveyor delivers and parks four FIFO parts
 PASS Full queue applies backpressure without instantiation
 PASS Simultaneous grips cannot own the same part twice
 PASS Removing the first item advances the next FIFO item
 PASS Left-hand work raises left shoulder, arm and wrist independently
-PASS Avatar grip anchor follows the held part within reachable arm range (error=0.002 m)
-PASS Avatar palm and the part surface grip position agree
+PASS Avatar preserves anatomical arm length and bounds unreachable controller error (error=0.151 m)
+PASS Avatar palm remains close to the held part without stretching bones
 PASS Avatar eye anchor follows the tracked HMD pose
 PASS Surface heat shader receives independent left/right loads
 PASS Tracking loss freezes held part and hold timer
@@ -29,6 +31,7 @@ PASS Pool reuses instances and stays bounded at twelve
 PASS Queue capacity stays bounded throughout the task
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
+PASS RULA produces a bounded full-body grand score
 PASS Head, hands, parts, scores and task counts are streamed to a bounded binary recording
 PASS Recorded session reopens for third-person playback
 PASS Playback disables live simulation and XR pose writes

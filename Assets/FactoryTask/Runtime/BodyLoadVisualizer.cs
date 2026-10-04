@@ -34,6 +34,9 @@ namespace FactoryTask
         public ConveyorController conveyor;
         public Image beltSpeedBar;
         public NumberReadout beltSpeedPct;
+        public RulaAssessment rula;
+        public NumberReadout rulaScore;
+        public Image rulaIndicator;
 
         [Header("확장 HUD (선택 — 미연결 시 무시됨)")]
         public ErgonomicReport report;
@@ -77,6 +80,11 @@ namespace FactoryTask
             }
             if(averageBar!=null){averageBar.fillAmount=avg/100f;averageBar.color=ColorFor(avg);}
             weight.Set(Mathf.RoundToInt(task.HeldWeight),glyphs);average.Set(Mathf.RoundToInt(avg),glyphs);
+            if(rula!=null&&rulaScore!=null&&rula.IsValid)
+            {
+                int score=rula.WorstGrandScore;rulaScore.Set(score,glyphs);
+                if(rulaIndicator!=null)rulaIndicator.color=score<=2?new Color(.18f,.85f,.48f):score<=4?new Color(1,.8f,.13f):score<=6?new Color(1,.48f,.08f):new Color(.97f,.23f,.22f);
+            }
 
             // ── 확장 HUD ──────────────────────────────────────────────
 

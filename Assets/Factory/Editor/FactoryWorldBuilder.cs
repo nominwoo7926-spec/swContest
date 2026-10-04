@@ -177,28 +177,13 @@ public static class FactoryWorldBuilder
     {var g=Box(name,p,(a+b)*.5f,new Vector3(width,(b-a).magnitude,width),mat,.004f);g.transform.localRotation=Quaternion.FromToRotation(Vector3.up,b-a);}
     static Transform Label(Transform p,string words,Vector3 position,float height,string color="White",Vector3 rotation=default)
     {
-        var t=Group("Label_"+words.Replace('\n','_'),p);t.localPosition=position;t.localEulerAngles=rotation;
-        string safe=string.Concat(words.Select(c=>char.IsLetterOrDigit(c)?c:'_'))+"_"+Mathf.RoundToInt(height*1000)+"_"+color;
-        string path=Root+"/Meshes/Label_"+safe+".asset";var existing=AssetDatabase.LoadAssetAtPath<Mesh>(path);Mesh mesh;
-        {
-            var vertices=new List<Vector3>();var uv=new List<Vector2>();var colors=new List<Color>();var triangles=new List<int>();
-            string[] rows=words.Split('\n');float scale=height/54f;
-            for(int row=0;row<rows.Length;row++){
-                float width=0;foreach(char c in rows[row])width+=glyphWidths[c-32]*scale;
-                float x=-width*.5f;float y=(rows.Length-1)*height*.7f-row*height*1.4f;
-                foreach(char c in rows[row]){int index=c-32;int k=vertices.Count;float left=(index%16)*64f/1024f;float right=left+64f/1024f;float upper=1-(index/16)*96f/1024f;float lower=upper-96f/1024f;
-                    vertices.Add(new Vector3(x-3*scale,y-66*scale,0));vertices.Add(new Vector3(x+61*scale,y-66*scale,0));vertices.Add(new Vector3(x+61*scale,y+30*scale,0));vertices.Add(new Vector3(x-3*scale,y+30*scale,0));
-                    uv.Add(new Vector2(left,lower));uv.Add(new Vector2(right,lower));uv.Add(new Vector2(right,upper));uv.Add(new Vector2(left,upper));for(int j=0;j<4;j++)colors.Add(Mats[color].color);
-                    triangles.AddRange(new[]{k,k+2,k+1,k,k+3,k+2});x+=glyphWidths[index]*scale;
-                }
-            }
-            mesh=new Mesh{name="Lettering_"+safe};mesh.SetVertices(vertices);mesh.SetUVs(0,uv);mesh.SetColors(colors);mesh.SetTriangles(triangles,0);mesh.RecalculateBounds();mesh=PersistMesh(mesh,existing,path);
-        }
-        t.gameObject.AddComponent<MeshFilter>().sharedMesh=mesh;var r=t.gameObject.AddComponent<MeshRenderer>();r.sharedMaterial=textMaterial;r.shadowCastingMode=ShadowCastingMode.Off;r.receiveShadows=false;
+        // Keep the environment visual and language-neutral. Operational UI is rendered by the
+        // task HUD; decorative mesh lettering in the factory is intentionally omitted.
+        var t=Group("Decorative_Panel_Detail",p);t.localPosition=position;t.localEulerAngles=rotation;
         return t;
     }
     static void Sign(Transform p,string text,Vector3 pos,Vector2 size,string color="Blue",float letter=.2f)
-    {Box("Sign_Backplate",p,pos,new Vector3(size.x,size.y,.055f),color);var label=Label(p,text,pos+Vector3.back*.035f,letter);float w=label.GetComponent<MeshFilter>().sharedMesh.bounds.size.x;label.localScale=Vector3.one*Mathf.Min(1,size.x*.88f/Mathf.Max(w,.01f));}
+    {Box("Equipment_Color_Panel",p,pos,new Vector3(size.x,size.y,.055f),color);}
     static void SaveTemplate(string name,Transform t)
     {Prefabs[name]=PrefabUtility.SaveAsPrefabAsset(t.gameObject,Root+"/Prefabs/"+name+".prefab");Object.DestroyImmediate(t.gameObject);}
     static Transform Instance(string name,Transform p,Vector3 pos,float yaw=0)

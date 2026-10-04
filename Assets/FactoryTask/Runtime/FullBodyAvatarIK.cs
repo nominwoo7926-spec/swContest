@@ -31,11 +31,13 @@ namespace FactoryTask
         public float PoseConfidence => tracking != null && tracking.AllTracked ? 1 : 0;
         public float LeftGripError => Vector3.Distance(leftGripAnchor.position, tracking.leftHand.position);
         public float RightGripError => Vector3.Distance(rightGripAnchor.position, tracking.rightHand.position);
+        public float LeftSoleY => leftLeg.end.position.y-leftSoleOffset*modelRoot.lossyScale.y;
+        public float RightSoleY => rightLeg.end.position.y-rightSoleOffset*modelRoot.lossyScale.y;
         Quaternion headOffset;
         Vector3 leftFoot, rightFoot, smoothedRoot, bodyCorrection;
         Quaternion leftFootRotation, rightFootRotation;
         bool initialized, planted;
-        float leftCurl, rightCurl, smoothDrop, smoothForward;
+        float leftCurl, rightCurl, smoothDrop, smoothForward, leftSoleOffset, rightSoleOffset;
 
         void Awake() { Initialize(); }
         public void Initialize()
@@ -43,6 +45,12 @@ namespace FactoryTask
             if (initialized) return;
             initialized = true;
             ResetSkeleton();
+            float soleY=float.PositiveInfinity;
+            foreach(var surface in modelRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))soleY=Mathf.Min(soleY,surface.bounds.min.y);
+            if(float.IsInfinity(soleY))soleY=Mathf.Min(leftLeg.end.position.y,rightLeg.end.position.y);
+            float modelScale=Mathf.Max(.0001f,modelRoot.lossyScale.y);
+            leftSoleOffset=(leftLeg.end.position.y-soleY)/modelScale;
+            rightSoleOffset=(rightLeg.end.position.y-soleY)/modelScale;
             headOffset = Quaternion.Inverse(modelRoot.rotation) * head.rotation;
             smoothedRoot = modelRoot.position;
         }
@@ -76,15 +84,20 @@ namespace FactoryTask
             if (!planted) smoothedRoot = desiredRoot;
             smoothedRoot = Vector3.Lerp(smoothedRoot, desiredRoot, 1 - Mathf.Exp(-dt * 9));
             modelRoot.SetPositionAndRotation(smoothedRoot, heading);
+            float leftGroundY=floor+leftSoleOffset*scale,rightGroundY=floor+rightSoleOffset*scale;
             if (!planted)
             {
                 leftFoot = leftLeg.end.position; rightFoot = rightLeg.end.position;
+                leftFoot.y=leftGroundY;rightFoot.y=rightGroundY;
                 leftFootRotation = leftLeg.end.rotation; rightFootRotation = rightLeg.end.rotation;
                 planted = true;
             }
             // Replant only when the user has actually moved out of the stationary stance.
             Replant(ref leftFoot, leftLeg.end.position, dt);
             Replant(ref rightFoot, rightLeg.end.position, dt);
+            // The anchors represent ankle height. Recompute it from the calibrated floor every
+            // frame so an elevated first pose or model import offset cannot leave the avatar afloat.
+            leftFoot.y=leftGroundY;rightFoot.y=rightGroundY;
             float bend = Mathf.Clamp(smoothDrop * 55 + Mathf.Max(0, smoothForward) * 45, 0, 48);
             hips.position -= Vector3.up * smoothDrop * .3f;
             spine.rotation = Quaternion.AngleAxis(bend * .45f, calibration.Right) * spine.rotation;
@@ -93,11 +106,10 @@ namespace FactoryTask
             Vector3 eye = head.position + tracking.head.rotation * eyeOffset * scale;
             Vector3 correction=tracking.head.position-eye;
             bodyCorrection=fresh?correction:Vector3.Lerp(bodyCorrection,correction,follow);
-            hips.position+=bodyCorrection;
-            Vector3 neckAdjustment=tracking.head.position-(head.position+tracking.head.rotation*eyeOffset*scale);
-            // Smooth the torso while keeping the eye pose exact, with a bounded neck translation.
-            if(neckAdjustment.magnitude>.07f)hips.position+=neckAdjustment-neckAdjustment.normalized*.07f;
-            head.position=tracking.head.position-tracking.head.rotation*eyeOffset*scale;
+            // Move the whole torso through the pelvis. Never translate the head bone itself:
+            // doing so changes its local bone length and produces the stretched "rubber neck" seen
+            // from the spectator camera.
+            hips.position+=Vector3.ClampMagnitude(bodyCorrection,.32f);
             SolveLimb(leftLeg, leftFoot, hips.position + calibration.Forward * 2 - calibration.Right * .15f);
             SolveLimb(rightLeg, rightFoot, hips.position + calibration.Forward * 2 + calibration.Right * .15f);
             leftLeg.end.rotation = leftFootRotation; rightLeg.end.rotation = rightFootRotation;
@@ -119,24 +131,37 @@ namespace FactoryTask
             Vector3 wrist = target.position - target.rotation * gripFromWrist;
             float reach=Vector3.Distance(arm.upper.position,arm.lower.position)+Vector3.Distance(arm.lower.position,arm.end.position);
             Vector3 delta=wrist-arm.upper.position;
-            if(delta.magnitude>reach*1.24f)arm.upper.position+=delta.normalized*Mathf.Min(.08f,delta.magnitude-reach*1.24f);
-            Vector3 pole = arm.upper.position + calibration.Right * side * .45f - Vector3.up * .55f - calibration.Forward * .28f;
-            SolveLimb(arm, wrist, pole, 1.25f);
+            // Use a small clavicle swing for the last part of a reach. This keeps the shoulder
+            // connected to the torso while avoiding the old direct upper-arm translation.
+            Transform clavicle=arm.upper.parent;
+            if(clavicle!=null&&delta.magnitude>reach*.9f)
+            {
+                Vector3 shoulderVector=arm.upper.position-clavicle.position;
+                Vector3 desiredVector=wrist-clavicle.position;
+                if(shoulderVector.sqrMagnitude>.0001f&&desiredVector.sqrMagnitude>.0001f)
+                {
+                    Quaternion swing=Quaternion.FromToRotation(shoulderVector,desiredVector);
+                    clavicle.rotation=Quaternion.Slerp(clavicle.rotation,swing*clavicle.rotation,.22f);
+                    delta=wrist-arm.upper.position;
+                }
+            }
+            // A three-point tracker cannot know shoulder translation. Clamp unreachable controller
+            // poses instead of pulling the shoulder out of the torso or lengthening arm bones.
+            if(delta.magnitude>reach*.985f)wrist=arm.upper.position+delta.normalized*(reach*.985f);
+            Vector3 pole = arm.upper.position + calibration.Right * side * .22f + calibration.Forward * .42f - Vector3.up * .12f;
+            SolveLimb(arm, wrist, pole);
             arm.end.rotation = target.rotation * arm.endRotationOffset;
         }
         static void Curl(Transform[] fingers, Vector3[] axes, float amount)
         {
             for (int i = 0; i < fingers.Length; i++) fingers[i].localRotation *= Quaternion.AngleAxis(amount, axes[i]);
         }
-        public static void SolveLimb(AvatarLimb limb, Vector3 target, Vector3 pole, float maxStretch = 1.04f)
+        public static void SolveLimb(AvatarLimb limb, Vector3 target, Vector3 pole, float maxStretch = 1f)
         {
             Vector3 root = limb.upper.position;
             float a = Vector3.Distance(root, limb.lower.position), b = Vector3.Distance(limb.lower.position, limb.end.position);
             Vector3 delta = target - root; float distance = delta.magnitude;
             if (a < .001f || b < .001f || distance < .001f) return;
-            float stretch = Mathf.Clamp(distance / ((a + b) * .995f), 1, maxStretch);
-            limb.lower.localPosition *= stretch; limb.end.localPosition *= stretch;
-            a *= stretch; b *= stretch;
             Vector3 direction = delta / distance;
             float d = Mathf.Clamp(distance, Mathf.Abs(a - b) + .001f, a + b - .001f);
             float along = (a * a - b * b + d * d) / (2 * d);

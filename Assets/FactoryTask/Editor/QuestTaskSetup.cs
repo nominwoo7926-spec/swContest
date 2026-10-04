@@ -94,8 +94,10 @@ public static class QuestTaskSetup
         controller.beltRenderer=production.GetComponentsInChildren<Renderer>().First(r=>r.name=="Upper_Belt");
         // Texture property animation cannot use a statically batched belt renderer.
         GameObjectUtility.SetStaticEditorFlags(controller.beltRenderer.gameObject,StaticEditorFlags.ContributeGI|StaticEditorFlags.ReflectionProbeStatic);
-        BuildPanel(head,estimator,task,calibration,controller);
+        var rula=systems.gameObject.AddComponent<RulaAssessment>();rula.tracking=tracking;rula.calibration=calibration;rula.task=task;
+        BuildPanel(head,estimator,task,calibration,controller,rula);
         AvatarDemoSetup.Attach(root);
+        rula.avatar=root.GetComponentInChildren<FullBodyAvatarIK>();
         EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.ImportAsset(ScenePath);AssetDatabase.SaveAssets();
         var buildScene=new EditorBuildSettingsScene(ScenePath,true){guid=new GUID(AssetDatabase.AssetPathToGUID(ScenePath))};EditorBuildSettings.scenes=new[]{buildScene};
         Selection.activeGameObject=root.gameObject;
@@ -179,7 +181,7 @@ public static class QuestTaskSetup
     {
         var result=new NumberReadout{digits=new Image[3]};for(int i=0;i<3;i++){result.digits[i]=Image(name+"_"+i,parent,pos+new Vector2((i-1)*height*.55f,0),new Vector2(height*.8f,height),Color.white,"Digit0");result.digits[i].enabled=i==2;}return result;
     }
-    static void BuildPanel(Transform head,BodyLoadEstimator estimator,XRGrabTaskTracker task,UserCalibration calibration,ConveyorController controller)
+    static void BuildPanel(Transform head,BodyLoadEstimator estimator,XRGrabTaskTracker task,UserCalibration calibration,ConveyorController controller,RulaAssessment rula)
     {
         // 510×420 패널 — 왼쪽 신체 도식 + 오른쪽 진행 바 차트
         var go=new GameObject("Relative_Load_Panel",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(head,false);go.transform.localPosition=new Vector3(-.52f,.20f,1.08f);go.transform.localRotation=Quaternion.Euler(0,-21,0);go.transform.localScale=Vector3.one*.001f;
@@ -202,7 +204,7 @@ public static class QuestTaskSetup
         Image("Pelvis",rect,new Vector2(-65,-66),new Vector2(68,20),new Color(.35f,.46f,.55f));
         foreach(float x in new[]{-85f,-45f})Image("Leg_Schematic",rect,new Vector2(x,-102),new Vector2(15,58),new Color(.24f,.34f,.43f));
 
-        var visual=go.AddComponent<BodyLoadVisualizer>();visual.estimator=estimator;visual.task=task;visual.calibration=calibration;
+        var visual=go.AddComponent<BodyLoadVisualizer>();visual.estimator=estimator;visual.task=task;visual.calibration=calibration;visual.rula=rula;
         visual.regions=new Image[7];visual.regionNumbers=new NumberReadout[7];visual.regionBars=new Image[7];visual.averageBar=avgBar;
 
         // 신체 부위 색상 도식 (X축 -65 기준으로 이동)
@@ -243,6 +245,8 @@ public static class QuestTaskSetup
         Image("Kg",rect,new Vector2(-88,-143),new Vector2(36,24),Color.white,"Kg");
         Image("Average_Label",rect,new Vector2(-5,-143),new Vector2(56,24),new Color(.6f,.73f,.8f),"Average");
         visual.average=Number("Average",rect,new Vector2(54,-143),23);
+        visual.rulaIndicator=Image("RULA_Indicator",rect,new Vector2(105,-143),new Vector2(31,31),new Color(.18f,.85f,.48f),"Circle");
+        visual.rulaScore=Number("RULA_Score",rect,new Vector2(105,-143),20);
         // 벨트 속도 바 (푸터 오른쪽 — 초록=정상, 빨강=감속)
         Image("BeltBar_Bg",rect,new Vector2(155,-143),new Vector2(110,14),new Color(.07f,.11f,.18f));
         var beltBar=Image("BeltBar_Fill",rect,new Vector2(155,-143),new Vector2(110,14),BodyLoadVisualizer.ColorFor(0));
@@ -362,7 +366,7 @@ public static class QuestTaskEditorBridge
     {
         if(EditorApplication.timeSinceStartup<nextPoll||EditorApplication.isCompiling||EditorApplication.isUpdating)return;nextPoll=EditorApplication.timeSinceStartup+1;
         const string path="Temp/FactoryTask.command";if(!File.Exists(path))return;string command=File.ReadAllText(path).Trim();File.Delete(path);
-        try{switch(command){case "setup":QuestTaskSetup.Setup();break;case "open":QuestTaskSetup.Open();break;case "validate":QuestTaskSetup.Validate();break;case "playtests":QuestTaskSetup.PlayTests();break;case "capture":QuestTaskSetup.Capture();break;default:throw new Exception("Unknown local editor command");}File.WriteAllText("Temp/FactoryTask.result",command+" OK");}
+        try{switch(command){case "setup":QuestTaskSetup.Setup();break;case "open":QuestTaskSetup.Open();break;case "validate":QuestTaskSetup.Validate();break;case "playtests":QuestTaskSetup.PlayTests();break;case "capture":QuestTaskSetup.Capture();break;case "build":QuestTaskSetup.BuildAndroid();break;default:throw new Exception("Unknown local editor command");}File.WriteAllText("Temp/FactoryTask.result",command+" OK");}
         catch(Exception error){File.WriteAllText("Temp/FactoryTask.result",error.ToString());Debug.LogException(error);}
     }
 }
