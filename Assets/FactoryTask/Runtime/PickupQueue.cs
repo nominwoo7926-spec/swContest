@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FactoryTask
@@ -6,26 +7,24 @@ namespace FactoryTask
     {
         public Transform[] slots;
         public Transform[] approach;
-        ConveyorPart[] entries;
-        public int Count { get; private set; }
-        public int Capacity => slots == null ? 0 : slots.Length;
+        readonly List<ConveyorPart> entries=new List<ConveyorPart>();
+        public int Count => entries.Count;
+        public int Capacity => int.MaxValue;
         public ConveyorPart Front => Count > 0 ? entries[0] : null;
-        public bool Full => Count >= Capacity;
+        public bool Full => false;
         void Awake() { Initialize(); }
-        public void Initialize() { if (entries == null) entries = new ConveyorPart[Capacity]; }
+        public void Initialize() { }
         public bool Enqueue(ConveyorPart part)
         {
-            Initialize(); if (part == null || Full) return false;
-            for (int i = 0; i < Count; i++) if (entries[i] == part) return false;
-            entries[Count++] = part; return true;
+            Initialize(); if (part == null || entries.Contains(part)) return false;
+            entries.Add(part); return true;
         }
         public bool CanPick(ConveyorPart part) => part == Front && part.State == PartState.Waiting;
         public bool Remove(ConveyorPart part)
         {
             for (int i = 0; i < Count; i++) if (entries[i] == part)
             {
-                for (int j = i; j < Count - 1; j++) entries[j] = entries[j + 1];
-                entries[--Count] = null; return true;
+                entries.RemoveAt(i); return true;
             }
             return false;
         }
@@ -36,7 +35,9 @@ namespace FactoryTask
             {
                 var part = entries[i];
                 bool onApproach = part.RouteIndex < approach.Length;
-                Vector3 target = onApproach ? approach[part.RouteIndex].position : slots[i].position;
+                int rowWidth=Mathf.Max(1,slots.Length);
+                int slotIndex=i%rowWidth,layer=i/rowWidth;
+                Vector3 target = onApproach ? approach[part.RouteIndex].position : slots[slotIndex].position+Vector3.up*(layer*.24f);
                 target += Vector3.up*(part.HalfHeight+.004f);
                 Vector3 next = Vector3.MoveTowards(part.Body.position, target, metresPerSecond * deltaTime);
                 bool reached = (next - target).sqrMagnitude < .00001f;
