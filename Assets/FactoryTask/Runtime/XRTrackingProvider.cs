@@ -55,6 +55,8 @@ namespace FactoryTask
         }
         void EnsureHandVisualizers()
         {
+            // Scenes built by setup carry the realistic hand; only fall back to the primitive hand otherwise.
+            if ((leftHand != null && leftHand.GetComponent<RealisticHandVisual>() != null) || (rightHand != null && rightHand.GetComponent<RealisticHandVisual>() != null)) return;
             if (leftHand != null && leftHand.GetComponent<VRHandVisualizer>() == null)
             {
                 var vis = leftHand.gameObject.AddComponent<VRHandVisualizer>();

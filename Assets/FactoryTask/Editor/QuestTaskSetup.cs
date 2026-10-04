@@ -51,6 +51,9 @@ public static class QuestTaskSetup
         if(production==null)throw new InvalidOperationException("Production_Line_A was not found.");
         foreach(var t in production.GetComponentsInChildren<Transform>(true))
             if(t.name=="Product_Carrier"||t.name=="Housing_In_Process"||t.name=="Product_Cap")t.gameObject.SetActive(false);
+        // Hide all painted lettering (wall board, floor/line labels, safety and bin signs); boards and posts stay.
+        foreach(var r in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include,FindObjectsSortMode.None))
+            if(r.sharedMaterial!=null&&r.sharedMaterial.name=="Static_Lettering")r.gameObject.SetActive(false);
         var root=New("Quest_Task");var equipment=New("Task_Equipment",root);var systems=New("Systems",root);
         var spawner=New("Part_Pool",systems).gameObject.AddComponent<PartSpawner>();
         var controller=systems.gameObject.AddComponent<ConveyorController>();var tracking=systems.gameObject.AddComponent<XRTrackingProvider>();
@@ -97,7 +100,6 @@ public static class QuestTaskSetup
         foreach(float x in new[]{-wall,wall})Solid(Box("Box_Side",done,new Vector3(x,.95f,0),new Vector3(.035f,.35f,BinDepth),gray,true),tableFriction);
         foreach(float z in new[]{-endWall,endWall})Solid(Box("Box_End",done,new Vector3(0,.95f,z),new Vector3(BinWidth-.07f,.35f,.035f),gray,true),tableFriction);
         foreach(float x in new[]{-wall+.1f,wall-.1f})foreach(float z in new[]{-.28f,.28f})Box("Box_Stand",done,new Vector3(x,.365f,z),new Vector3(.05f,.73f,.05f),steel,true);
-        WorldSign(done,"Complete",new Vector3(0,.96f,-endWall-.035f),.4f,.13f);
         // Tall enough that a part resting on top of another still counts as inside.
         var trigger=New("Completion_Interior",done).gameObject.AddComponent<BoxCollider>();trigger.isTrigger=true;trigger.center=new Vector3(0,1.06f,0);trigger.size=new Vector3(BinWidth-.085f,.55f,BinDepth-.085f);
         task.completionVolume=trigger;task.recoveryPoint=Point("Recovery_Pad",systems,new Vector3(tableX,tableTop+.3f,beltZ-.1f));
@@ -114,15 +116,9 @@ public static class QuestTaskSetup
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;head.gameObject.AddComponent<AudioListener>();
         tracking.origin=rig;tracking.head=head;tracking.leftHand=New("Left_Controller_Grip",rig);tracking.rightHand=New("Right_Controller_Grip",rig);
         tracking.leftHand.localPosition=new Vector3(-.2f,1,-.05f);tracking.rightHand.localPosition=new Vector3(.2f,1,-.05f);
+        var skin=Material("Hand_Skin",new Color(.87f,.69f,.58f),0);
         foreach(var hand in new[]{tracking.leftHand,tracking.rightHand})
-        {
-            var vis = hand.gameObject.AddComponent<VRHandVisualizer>();
-            vis.side = (hand == tracking.leftHand) ? HandSide.Left : HandSide.Right;
-            vis.tracking = tracking;
-            vis.handMaterial = (hand == tracking.leftHand) ? blue : amber;
-            vis.accentMaterial = steel;
-            vis.BuildHand();
-        }
+            BuildRealisticHand(hand,hand==tracking.leftHand,skin,tracking,task);
         tracking.actions=CreateActions();calibration.tracking=tracking;calibration.task=task;
         task.tracking=tracking;task.calibration=calibration;task.pool=spawner;task.estimator=estimator;
         estimator.tracking=tracking;estimator.calibration=calibration;estimator.task=task;
@@ -191,6 +187,44 @@ public static class QuestTaskSetup
         if(m==null){m=new PhysicsMaterial(name);AssetDatabase.CreateAsset(m,path);}
         m.dynamicFriction=friction;m.staticFriction=friction;m.bounciness=0;m.frictionCombine=combine;m.bounceCombine=PhysicsMaterialCombine.Minimum;
         EditorUtility.SetDirty(m);return m;
+    }
+    // Meta's skinned hand mesh on a controller grip pose: palm toward the handle (+X left, -X right),
+    // fingers along +Z, thumb up. The palm side comes from the mesh's finger-pad vs fingernail markers.
+    static void BuildRealisticHand(Transform controller,bool left,Material skin,XRTrackingProvider tracking,XRGrabTaskTracker task)
+    {
+        string p=left?"l":"r";
+        var model=AssetDatabase.LoadAssetAtPath<GameObject>("Packages/com.meta.xr.sdk.core/Meshes/HandTracking/OculusHand_"+(left?"L":"R")+".fbx");
+        if(model==null)throw new InvalidOperationException("Meta XR Core hand mesh was not found.");
+        var hand=(GameObject)Object.Instantiate(model);hand.name="Realistic_Hand_"+(left?"L":"R");
+        hand.transform.SetPositionAndRotation(Vector3.zero,Quaternion.identity);hand.transform.localScale=Vector3.one;
+        var all=hand.GetComponentsInChildren<Transform>(true);
+        Transform Bone(string name)=>all.First(t=>t.name==name);
+        Vector3 wrist=Bone("b_"+p+"_wrist").position,knuckle=Bone("b_"+p+"_middle1").position;
+        Vector3 along=(knuckle-wrist).normalized,palm=Vector3.zero;
+        foreach(var f in new[]{"index","middle","ring","pinky"})palm+=Bone(p+"_"+f+"_finger_pad_marker").position-Bone(p+"_"+f+"_fingernail_marker").position;
+        palm=Vector3.ProjectOnPlane(palm,along).normalized;
+        var joints=new List<Transform>();var axes=new List<Vector3>();var segments=new List<int>();var thumbs=new List<bool>();
+        foreach(var t in all)
+        {
+            var m=System.Text.RegularExpressions.Regex.Match(t.name,"^b_"+p+"_(index|middle|ring|pinky|thumb)([123])$");
+            if(!m.Success)continue;
+            var child=t.Cast<Transform>().FirstOrDefault(c=>c.name.StartsWith("b_"));if(child==null)continue;
+            Vector3 bone=(child.position-t.position).normalized;
+            // Rotating the bone about cross(bone, palm normal) swings it toward the palm.
+            joints.Add(t);axes.Add(t.InverseTransformDirection(Vector3.Cross(bone,palm).normalized));
+            segments.Add(int.Parse(m.Groups[2].Value));thumbs.Add(m.Groups[1].Value=="thumb");
+        }
+        Vector3 palmTarget=left?Vector3.right:Vector3.left;
+        Quaternion align=Quaternion.LookRotation(Vector3.forward,palmTarget)*Quaternion.Inverse(Quaternion.LookRotation(along,palm));
+        Vector3 palmPoint=Vector3.Lerp(wrist,knuckle,.75f)+palm*.015f;
+        hand.transform.SetParent(controller,false);hand.transform.localRotation=align;
+        // Palm surface ~3 cm from the handle centre (the grip pose origin), matching XRGrabTaskTracker.PalmOffset.
+        hand.transform.localPosition=XRGrabTaskTracker.PalmOffset(left?HandSide.Left:HandSide.Right)-align*palmPoint;
+        foreach(var r in hand.GetComponentsInChildren<Renderer>(true)){r.sharedMaterial=skin;r.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;}
+        foreach(var t in all)t.gameObject.layer=AvatarDemoSetup.VrLayer;
+        var visual=controller.gameObject.AddComponent<RealisticHandVisual>();
+        visual.side=left?HandSide.Left:HandSide.Right;visual.tracking=tracking;visual.task=task;
+        visual.joints=joints.ToArray();visual.axes=axes.ToArray();visual.segment=segments.ToArray();visual.thumb=thumbs.ToArray();
     }
     static ConveyorPart CreatePartPrefab()
     {

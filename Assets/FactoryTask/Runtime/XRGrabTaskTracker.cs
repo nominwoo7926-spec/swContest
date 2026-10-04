@@ -30,7 +30,7 @@ namespace FactoryTask
         bool leftWasPressed,rightWasPressed;
         float leftStrain,rightStrain;
         // Completed parts stay in the bin, oldest first; when it holds binCapacity the oldest fades out.
-        public int binCapacity = 6;
+        public int binCapacity = 4;
         readonly System.Collections.Generic.List<ConveyorPart> binned=new System.Collections.Generic.List<ConveyorPart>();
         public int BinnedCount => binned.Count;
         void FixedUpdate(){Tick(Time.fixedDeltaTime);}
@@ -78,7 +78,7 @@ namespace FactoryTask
             held=Held(side);
             if(held!=null)
             {
-                held.Follow(hand.position,hand.rotation,dt,true);
+                held.Follow(Palm(side),hand.rotation,dt,true);
                 strain=held.Separation>breakawayDistance?strain+dt:0;
                 if(!pressed||strain>breakawaySeconds)Drop(side);
             }
@@ -90,6 +90,10 @@ namespace FactoryTask
             held.Release();if(side==HandSide.Left)LeftHeld=null;else RightHeld=null;
         }
         public ConveyorPart Held(HandSide side)=>side==HandSide.Left?LeftHeld:RightHeld;
+        // Grip pose sits in the controller handle with the palm facing it (+X for the left hand,
+        // -X for the right); the palm surface is about 3 cm out from the handle centre.
+        public static Vector3 PalmOffset(HandSide side)=>(side==HandSide.Left?Vector3.left:Vector3.right)*.03f;
+        public Vector3 Palm(HandSide side){var hand=tracking.Hand(side);return hand.position+hand.rotation*PalmOffset(side);}
         public bool TryGrab(HandSide side)
         {
             if(!calibration.IsCalibrated||!tracking.AllTracked||Held(side)!=null||side==HandSide.None)return false;
@@ -100,22 +104,18 @@ namespace FactoryTask
                 float distance=(part.Shape.ClosestPoint(position)-position).sqrMagnitude;
                 if(distance<=best){nearest=part;best=distance;}
             }
-            if(nearest==null||!nearest.Grab(side,position,hand.rotation))return false;
+            if(nearest==null||!nearest.Grab(side,Palm(side),hand.rotation))return false;
             if(side==HandSide.Left)LeftHeld=nearest;else RightHeld=nearest;
             return true;
         }
         public bool IsInside(ConveyorPart part)
         {
             if(part.State!=PartState.Dropped||part.LastHand==HandSide.None)return false;
-            Bounds b=part.Shape.bounds;Vector3 half=completionVolume.size*.5f;
-            // Require the entire part, not just its centre or a trigger touch, inside the box.
-            for(int i=0;i<8;i++)
-            {
-                Vector3 corner=new Vector3((i&1)==0?b.min.x:b.max.x,(i&2)==0?b.min.y:b.max.y,(i&4)==0?b.min.z:b.max.z);
-                Vector3 v=completionVolume.transform.InverseTransformPoint(corner)-completionVolume.center;
-                if(Mathf.Abs(v.x)>half.x||Mathf.Abs(v.y)>half.y||Mathf.Abs(v.z)>half.z)return false;
-            }
-            return true;
+            // The part's centre must be over the bin floor and below the stacking limit. Requiring every
+            // corner inside rejected parts that rested tilted or on top of others, so they never counted.
+            Vector3 half=completionVolume.size*.5f;
+            Vector3 v=completionVolume.transform.InverseTransformPoint(part.Shape.bounds.center)-completionVolume.center;
+            return Mathf.Abs(v.x)<=half.x&&Mathf.Abs(v.y)<=half.y&&Mathf.Abs(v.z)<=half.z;
         }
     }
 }

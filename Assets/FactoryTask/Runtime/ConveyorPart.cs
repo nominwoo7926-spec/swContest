@@ -12,7 +12,7 @@ namespace FactoryTask
     [RequireComponent(typeof(Rigidbody), typeof(BoxCollider))]
     public sealed class ConveyorPart : MonoBehaviour
     {
-        const float PalmGap = .02f, SeatSeconds = .15f, MaxFollowSpeed = 8, MaxReleaseSpeed = 2.5f, MaxReleaseSpin = 8;
+        const float PalmGap = .008f, SeatSeconds = .15f, MaxFollowSpeed = 8, MaxReleaseSpeed = 2.5f, MaxReleaseSpin = 8;
         public float weightKg = 1;
         public Renderer bodyRenderer;
         public Material[] weightMaterials;
