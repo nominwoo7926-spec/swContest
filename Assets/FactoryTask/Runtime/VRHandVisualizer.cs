@@ -50,7 +50,7 @@ namespace FactoryTask
             var modelContainer = new GameObject("Human_Hand_Model");
             modelContainer.transform.SetParent(transform, false);
             modelContainer.transform.localPosition = Vector3.zero;
-            modelContainer.transform.localRotation = Quaternion.identity;
+            modelContainer.transform.localRotation = Quaternion.Euler(0, 0, s * 90f);
 
             // 1. Wrist Cuff
             var wrist = CreatePrimitive(PrimitiveType.Cube, "Wrist", modelContainer.transform,
@@ -113,20 +113,39 @@ namespace FactoryTask
         {
             if (tracking == null) return;
             bool grip = (side == HandSide.Left) ? tracking.LeftGrip : tracking.RightGrip;
-            float targetCurl = grip ? 50f : 0f;
-            currentCurl = Mathf.Lerp(currentCurl, targetCurl, 1f - Mathf.Exp(-Time.deltaTime * 18f));
+            
+            // 박스를 잡는 상태(0.0 ~ 1.0) 보간
+            float targetState = grip ? 1f : 0f;
+            currentCurl = Mathf.Lerp(currentCurl, targetState, 1f - Mathf.Exp(-Time.deltaTime * 18f));
 
-            // Animate finger curling on grip
+            // 박스 잡기(Box Grab)를 위한 관절별 타겟 각도 세팅
+            float proximalAngle = 35f;  // 손가락 첫 마디: 박스 윗면을 덮도록 구부림
+            float distalAngle = 55f;    // 손가락 끝 마디: 박스 모서리를 감싸쥐도록 깊게 구부림
+            float thumbBaseAngle = 25f; // 엄지 안쪽: 박스 측면을 지지하도록 구부림
+            float thumbTipAngle = 20f;  // 엄지 끝: 박스를 꽉 쥐도록 구부림
+
+            // 4개 손가락(검지~새끼) 애니메이션 적용
             for (int i = 0; i < 4; i++)
             {
                 if (fingerBases[i] != null)
                 {
-                    fingerBases[i].localRotation = baseRestRotations[i] * Quaternion.AngleAxis(currentCurl, Vector3.right);
+                    fingerBases[i].localRotation = baseRestRotations[i] * Quaternion.AngleAxis(currentCurl * proximalAngle, Vector3.right);
+                }
+                if (fingerTips[i] != null)
+                {
+                    // 끝 마디는 기본 18도 + 그립 시 추가 각도
+                    fingerTips[i].localRotation = Quaternion.Euler(18f + (currentCurl * distalAngle), 0, 0);
                 }
             }
+            
+            // 엄지손가락 애니메이션 적용
             if (thumbBase != null)
             {
-                thumbBase.localRotation = thumbRestRotation * Quaternion.AngleAxis(currentCurl * 0.5f, Vector3.right);
+                thumbBase.localRotation = thumbRestRotation * Quaternion.AngleAxis(currentCurl * thumbBaseAngle, Vector3.right);
+            }
+            if (thumbTip != null)
+            {
+                thumbTip.localRotation = Quaternion.Euler(15f + (currentCurl * thumbTipAngle), 0, 0);
             }
         }
 
