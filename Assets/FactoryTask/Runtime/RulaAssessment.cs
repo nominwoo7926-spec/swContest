@@ -70,7 +70,7 @@ namespace FactoryTask
             if(Mathf.Abs(Vector3.Dot(trunk,right))>.17f)trunkScore++;
             bool grounded=Mathf.Abs(avatar.LeftSoleY-calibration.standingPoint.position.y)<.05f&&Mathf.Abs(avatar.RightSoleY-calibration.standingPoint.position.y)<.05f;
             int legs=grounded?1:2,postureB=LookupB(neck,trunkScore,legs);
-            var held=task.Held(side);float weight=held!=null?held.weightKg:0;
+            var held=task.Held(side);float weight=task.HandWeight(side);
             // RULA muscle-use adjustment: static posture >1 minute or repeated action >4/min.
             int muscle=(held!=null&&held.HoldSeconds>=60)||(task.estimator!=null&&task.estimator.RecentCount(side,Time.time)>4)?1:0;
             // RULA force load: <2kg=0, 2-10kg intermittent=1, 2-10kg static/repeated or >10kg intermittent=2, >10kg static/repeated=3

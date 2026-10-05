@@ -29,11 +29,15 @@ PASS Right-hand work drives right-side scores
 PASS Right completion is recorded separately
 PASS Recent repetition history is isolated by hand
 PASS Repetition history expires after 60 seconds
+PASS A single grip no longer picks up a part
+PASS Both grips on one part carry it together and split its weight between the arms
+PASS A two-handed carry lifts the part between the palms
+PASS Opening either hand releases the part
 PASS Spectator dummy starts a pick-and-place sequence
 PASS Dummy sequence finishes and returns to idle
 PASS Both completed parts rest in the bin; every part is the single 5 kg size
 PASS Line keeps supplying parts
-PASS Accumulated parts still do not interpenetrate (max 0.002 m Conveying@(3.82, 1.12, -3.13) / Conveying@(3.58, 1.13, -3.23))
+PASS Accumulated parts still do not interpenetrate (max 0.004 m Conveying@(3.79, 1.12, -3.22) / Conveying@(3.58, 1.13, -3.12))
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS RULA produces a bounded full-body grand score

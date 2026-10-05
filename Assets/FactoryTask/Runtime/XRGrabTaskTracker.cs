@@ -25,7 +25,12 @@ namespace FactoryTask
         public int CompletedTotal => CompletedLeft+CompletedRight;
         bool replay;
         float replayWeight;
-        public float HeldWeight => replay?replayWeight:(LeftHeld!=null?LeftHeld.weightKg:0)+(RightHeld!=null?RightHeld.weightKg:0);
+        // Parts are carried with both hands: both grips must close on the same part, one part at a time.
+        public bool requireBothHands = true;
+        public bool CarriedWithBothHands => LeftHeld!=null&&LeftHeld==RightHeld;
+        public float HeldWeight => replay?replayWeight:(LeftHeld!=null?LeftHeld.weightKg:0)+(RightHeld!=null&&RightHeld!=LeftHeld?RightHeld.weightKg:0);
+        // Load borne by one arm: a two-handed carry splits the part's weight between the hands.
+        public float HandWeight(HandSide side){var part=Held(side);return part==null?0:CarriedWithBothHands?part.weightKg*.5f:part.weightKg;}
         public void ApplyRecordedTask(float weight,int left,int right){replay=true;replayWeight=weight;completedLeft=left;completedRight=right;}
         bool leftWasPressed,rightWasPressed;
         float leftStrain,rightStrain;
@@ -38,8 +43,12 @@ namespace FactoryTask
         {
             if(!calibration.IsCalibrated)return;
             if(!tracking.HeadTracked||!tracking.Focused){Freeze(LeftHeld,dt);Freeze(RightHeld,dt);return;}
-            ProcessHand(HandSide.Left,tracking.LeftGrip,ref leftWasPressed,ref leftStrain,dt);
-            ProcessHand(HandSide.Right,tracking.RightGrip,ref rightWasPressed,ref rightStrain,dt);
+            if(requireBothHands)ProcessBothHands(dt);
+            else
+            {
+                ProcessHand(HandSide.Left,tracking.LeftGrip,ref leftWasPressed,ref leftStrain,dt);
+                ProcessHand(HandSide.Right,tracking.RightGrip,ref rightWasPressed,ref rightStrain,dt);
+            }
             for(int i=0;i<pool.Parts.Length;i++)
             {
                 var part=pool.Parts[i];if(!part.Free)continue;
@@ -54,8 +63,12 @@ namespace FactoryTask
                 if(part.InsideSeconds>=.2f)
                 {
                     HandSide side=part.LastHand;if(side==HandSide.None)continue;
+                    // A two-handed carry is one completed part (credited to the right-hand counter)
+                    // but a repetition for both arms.
                     if(side==HandSide.Left)completedLeft++;else completedRight++;
-                    estimator.RecordCompletion(side,Time.time);part.MarkCompleted();binned.Add(part);
+                    if(part.CarriedWithBothHands){estimator.RecordCompletion(HandSide.Left,Time.time);estimator.RecordCompletion(HandSide.Right,Time.time);}
+                    else estimator.RecordCompletion(side,Time.time);
+                    part.MarkCompleted();binned.Add(part);
                 }
             }
             UpdateBin(dt);
@@ -83,6 +96,55 @@ namespace FactoryTask
                 if(!pressed||strain>breakawaySeconds)Drop(side);
             }
             wasPressed=pressed;
+        }
+        void ProcessBothHands(float dt)
+        {
+            bool left=tracking.LeftGrip,right=tracking.RightGrip;var held=LeftHeld;
+            if(!tracking.Tracked(HandSide.Left)||!tracking.Tracked(HandSide.Right)){Freeze(held,dt);leftWasPressed=left;rightWasPressed=right;return;}
+            bool closing=(left&&!leftWasPressed)||(right&&!rightWasPressed);
+            if(held==null&&left&&right&&closing){TryGrabBoth();leftStrain=0;}
+            held=LeftHeld;
+            if(held!=null)
+            {
+                TwoHandPose(out Vector3 position,out Quaternion rotation);
+                held.Follow(position,rotation,dt,true);
+                leftStrain=held.Separation>breakawayDistance?leftStrain+dt:0;
+                // Opening either hand, or pulling the hands apart wider than the part, lets it go.
+                float spread=Vector3.Distance(Palm(HandSide.Left),Palm(HandSide.Right));
+                if(!left||!right||leftStrain>breakawaySeconds||spread>held.HalfHeight*2+.25f)DropBoth();
+            }
+            leftWasPressed=left;rightWasPressed=right;
+        }
+        // The part sits between the palms: centred on them, its X axis across from left to right palm.
+        void TwoHandPose(out Vector3 position,out Quaternion rotation)
+        {
+            Vector3 left=Palm(HandSide.Left),right=Palm(HandSide.Right);position=(left+right)*.5f;
+            Vector3 across=right-left;if(across.sqrMagnitude<1e-6f)across=tracking.Hand(HandSide.Right).right;across.Normalize();
+            Vector3 forward=Vector3.ProjectOnPlane(tracking.Hand(HandSide.Left).forward+tracking.Hand(HandSide.Right).forward,across);
+            if(forward.sqrMagnitude<1e-4f)forward=Vector3.ProjectOnPlane(tracking.head.forward,across);
+            forward.Normalize();rotation=Quaternion.LookRotation(forward,Vector3.Cross(forward,across));
+        }
+        public bool TryGrabBoth()
+        {
+            if(!calibration.IsCalibrated||!tracking.AllTracked||LeftHeld!=null||RightHeld!=null)return false;
+            Vector3 left=Palm(HandSide.Left),right=Palm(HandSide.Right);ConveyorPart nearest=null;float best=float.MaxValue,reach=gripReach*gripReach;
+            for(int i=0;i<pool.Parts.Length;i++)
+            {
+                var part=pool.Parts[i];if(!part.Free)continue;
+                float l=(part.Shape.ClosestPoint(left)-left).sqrMagnitude,r=(part.Shape.ClosestPoint(right)-right).sqrMagnitude;
+                // Both palms must be on (or right next to) this same part.
+                if(l<=reach&&r<=reach&&l+r<best){nearest=part;best=l+r;}
+            }
+            if(nearest==null)return false;
+            TwoHandPose(out Vector3 position,out Quaternion rotation);
+            if(!nearest.Grab(HandSide.Right,position,rotation,true))return false;
+            LeftHeld=RightHeld=nearest;
+            return true;
+        }
+        void DropBoth()
+        {
+            if(LeftHeld==null)return;
+            LeftHeld.Release();LeftHeld=RightHeld=null;
         }
         void Drop(HandSide side)
         {

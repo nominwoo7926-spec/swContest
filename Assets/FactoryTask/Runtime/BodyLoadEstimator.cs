@@ -57,7 +57,7 @@ namespace FactoryTask
         {
             var part=task.Held(side);if(part==null||!tracking.Tracked(side))return Vector3.zero;
             Vector3 delta=tracking.Hand(side).position-calibration.Shoulder(side);
-            return Evaluate(new LoadInput{holding=true,horizontalReach=Vector3.ProjectOnPlane(delta,Vector3.up).magnitude,totalReach=delta.magnitude,handAboveShoulder=delta.y,weight=part.weightKg,holdSeconds=part.HoldSeconds,travelMetres=part.TravelMetres,repeats=RecentCount(side,now)});
+            return Evaluate(new LoadInput{holding=true,horizontalReach=Vector3.ProjectOnPlane(delta,Vector3.up).magnitude,totalReach=delta.magnitude,handAboveShoulder=delta.y,weight=task.HandWeight(side),holdSeconds=part.HoldSeconds,travelMetres=part.TravelMetres,repeats=RecentCount(side,now)});
         }
         public void Tick(float dt,float now)
         {

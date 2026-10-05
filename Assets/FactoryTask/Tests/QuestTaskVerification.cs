@@ -96,6 +96,8 @@ public sealed class QuestTaskVerification : MonoBehaviour
         RunMathChecks();tracking=FindFirstObjectByType<XRTrackingProvider>();calibration=FindFirstObjectByType<UserCalibration>();task=FindFirstObjectByType<XRGrabTaskTracker>();estimator=FindFirstObjectByType<BodyLoadEstimator>();controller=FindFirstObjectByType<ConveyorController>();
         avatar=FindFirstObjectByType<FullBodyAvatarIK>();recording=FindFirstObjectByType<VRSessionRecorder>();spectator=FindFirstObjectByType<SpectatorCameraController>();
         if(recording!=null)recording.autoRecord=false;
+        // The per-hand checks below use single-hand grabs; two-handed carrying is verified separately.
+        task.requireBothHands=false;
         head=calibration.standingPoint.position+Vector3.up*1.65f;leftRest=head+new Vector3(-.2f,-.65f,-.05f);rightRest=head+new Vector3(.2f,-.65f,-.05f);
         Pose(leftRest,rightRest);float limit=Time.realtimeSinceStartup+8;
         while(!calibration.IsCalibrated&&Time.realtimeSinceStartup<limit)yield return null;
@@ -164,6 +166,18 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Pass(task.CompletedRight==1&&task.CompletedTotal==2,"Right completion is recorded separately");
         Pass(estimator.RecentCount(HandSide.Left,Time.time)==1&&estimator.RecentCount(HandSide.Right,Time.time)==1,"Recent repetition history is isolated by hand");
         Pass(estimator.RecentCount(HandSide.Left,Time.time+61)==0,"Repetition history expires after 60 seconds");
+        task.requireBothHands=true;
+        until=Time.time+15;while(ArrivedPart()==null&&Time.time<until)yield return null;
+        var pair=ArrivedPart();Vector3 centre=pair.Shape.bounds.center,across=Vector3.right*pair.HalfHeight;
+        Pose(centre-across,centre+across,true,false);yield return new WaitForSeconds(.2f);
+        Pass(task.LeftHeld==null&&task.RightHeld==null,"A single grip no longer picks up a part");
+        Pose(centre-across,centre+across,true,true);yield return new WaitForSeconds(.2f);
+        Pass(task.CarriedWithBothHands&&task.LeftHeld==pair&&Mathf.Approximately(task.HeldWeight,pair.weightKg)&&Mathf.Approximately(task.HandWeight(HandSide.Left),pair.weightKg*.5f),"Both grips on one part carry it together and split its weight between the arms");
+        Pose(centre-across+Vector3.up*.2f,centre+across+Vector3.up*.2f,true,true);yield return new WaitForSeconds(.4f);
+        Pass(task.LeftHeld==pair&&pair.Body.position.y>centre.y+.1f,"A two-handed carry lifts the part between the palms");
+        Pose(centre-across+Vector3.up*.2f,centre+across+Vector3.up*.2f,true,false);yield return new WaitForSeconds(.2f);
+        Pass(task.LeftHeld==null&&task.RightHeld==null&&pair.State==PartState.Dropped,"Opening either hand releases the part");
+        Pose(leftRest,rightRest);yield return new WaitForSeconds(.5f);
         var director=FindFirstObjectByType<ThirdPersonAvatarDirector>();
         if(director!=null&&spectator!=null)
         {

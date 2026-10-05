@@ -70,7 +70,7 @@ namespace FactoryTask
             SetPhysical(true); Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero;
             State = PartState.Conveying; Holder = LastHand = HandSide.None;
             InsideSeconds = FloorSeconds = HoldSeconds = TravelMetres = Separation = 0; wasTracked = false;
-            Completed = false; vanishTime = -1; fullSize = size;
+            Completed = false; vanishTime = -1; fullSize = size; CarriedWithBothHands = false;
         }
         public void MarkCompleted() { Completed = true; }
         void SetHeldVisual(bool held)
@@ -98,10 +98,12 @@ namespace FactoryTask
             if (!value && !Body.isKinematic) { Body.linearVelocity = Vector3.zero; Body.angularVelocity = Vector3.zero; }
             Body.isKinematic = !value; Body.useGravity = value; Shape.isTrigger = false;
         }
-        public bool Grab(HandSide hand, Vector3 handPosition, Quaternion handRotation)
+        // Set by a two-handed pick-up; kept after release so completion credits both arms.
+        public bool CarriedWithBothHands { get; private set; }
+        public bool Grab(HandSide hand, Vector3 handPosition, Quaternion handRotation, bool bothHands = false)
         {
             if (hand == HandSide.None || !Free) return false;
-            Holder = LastHand = hand; State = PartState.Held; SetHeldVisual(true);
+            Holder = LastHand = hand; State = PartState.Held; SetHeldVisual(true); CarriedWithBothHands = bothHands;
             HoldSeconds = TravelMetres = InsideSeconds = FloorSeconds = Separation = 0; previousHand = handPosition; wasTracked = true;
             Body.useGravity = false;
             // Keep the part where it was grabbed, then seat its nearest face into the palm over a
@@ -109,7 +111,8 @@ namespace FactoryTask
             Quaternion toHand = Quaternion.Inverse(handRotation);
             Vector3 seat = Body.position, closest = Shape.ClosestPoint(handPosition);
             Vector3 gap = handPosition - closest, inward = Body.position - closest;
-            if (gap.sqrMagnitude > 1e-8f && inward.sqrMagnitude > 1e-8f) seat += gap + inward.normalized * PalmGap;
+            // Held between two palms the part already sits where the hands closed on it.
+            if (!bothHands && gap.sqrMagnitude > 1e-8f && inward.sqrMagnitude > 1e-8f) seat += gap + inward.normalized * PalmGap;
             attachStart = toHand * (Body.position - handPosition);
             attachEnd = toHand * (seat - handPosition);
             attachRotation = toHand * Body.rotation; attachBlend = 0;
