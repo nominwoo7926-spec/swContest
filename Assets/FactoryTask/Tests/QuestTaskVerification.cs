@@ -164,6 +164,27 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Pass(task.CompletedRight==1&&task.CompletedTotal==2,"Right completion is recorded separately");
         Pass(estimator.RecentCount(HandSide.Left,Time.time)==1&&estimator.RecentCount(HandSide.Right,Time.time)==1,"Recent repetition history is isolated by hand");
         Pass(estimator.RecentCount(HandSide.Left,Time.time+61)==0,"Repetition history expires after 60 seconds");
+        var director=FindFirstObjectByType<ThirdPersonAvatarDirector>();
+        if(director!=null&&spectator!=null)
+        {
+            until=Time.time+10;while(director.isPerformingAction&&Time.time<until)yield return null;
+            // Real time and end-of-frame captures, so the IK pose matches the carried part exactly.
+            float previousScale=Time.timeScale;Time.timeScale=1;
+            director.TriggerPickAndPlaceSequence();
+            Pass(director.isPerformingAction,"Spectator dummy starts a pick-and-place sequence");
+            director.TriggerPickAndPlaceSequence();
+            // Capture the dummy at reach, lift, over the bin, lowering in and returning.
+            foreach(var (phase,label) in new[]{(.2f,"Reach"),(.36f,"Lift"),(.55f,"OverBin"),(.74f,"Place"),(.92f,"Return")})
+            {
+                while(director.isPerformingAction&&director.Progress<phase)yield return null;
+                // Evaluate the animator (and its IK pass) now, so the pose matches this frame's part position.
+                director.GetComponent<Animator>().Update(0);
+                CaptureSpectator("Dummy_"+label+"_"+director.Progress.ToString("F2"));
+            }
+            until=Time.time+10;while(director.isPerformingAction&&Time.time<until)yield return null;
+            Time.timeScale=previousScale;
+            Pass(!director.isPerformingAction,"Dummy sequence finishes and returns to idle");
+        }
         yield return new WaitForSeconds(4);
         Pass(task.BinnedCount==2&&task.pool.Parts.All(p=>!p.gameObject.activeSelf||p.weightKg==5),"Both completed parts rest in the bin; every part is the single 5 kg size");
         Pass(task.pool.Parts.Count(p=>p.State==PartState.Conveying)>3,"Line keeps supplying parts");

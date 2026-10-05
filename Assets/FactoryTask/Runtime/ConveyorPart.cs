@@ -14,6 +14,10 @@ namespace FactoryTask
     {
         const float PalmGap = .008f, SeatSeconds = .15f, MaxFollowSpeed = 8, MaxReleaseSpeed = 2.5f, MaxReleaseSpin = 8;
         public float weightKg = 1;
+        // While held, the part renders only in the headset: the spectator dummy carries its own copy,
+        // so the real part would otherwise float in the third-person view next to it.
+        public int heldLayer = 28;
+        int freeLayer = -1;
         public Renderer bodyRenderer;
         public Material[] weightMaterials;
         public Rigidbody Body { get; private set; }
@@ -69,6 +73,13 @@ namespace FactoryTask
             Completed = false; vanishTime = -1; fullSize = size;
         }
         public void MarkCompleted() { Completed = true; }
+        void SetHeldVisual(bool held)
+        {
+            if (freeLayer < 0) freeLayer = gameObject.layer;
+            int layer = held ? heldLayer : freeLayer;
+            if (gameObject.layer == layer) return;
+            foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
+        }
         public void BeginVanish() { if (!Vanishing) vanishTime = 0; }
         // Shrinks away while staying physical, so gravity keeps it settled and parts resting on it
         // ease down as it goes.
@@ -90,7 +101,7 @@ namespace FactoryTask
         public bool Grab(HandSide hand, Vector3 handPosition, Quaternion handRotation)
         {
             if (hand == HandSide.None || !Free) return false;
-            Holder = LastHand = hand; State = PartState.Held;
+            Holder = LastHand = hand; State = PartState.Held; SetHeldVisual(true);
             HoldSeconds = TravelMetres = InsideSeconds = FloorSeconds = Separation = 0; previousHand = handPosition; wasTracked = true;
             Body.useGravity = false;
             // Keep the part where it was grabbed, then seat its nearest face into the palm over a
@@ -127,7 +138,7 @@ namespace FactoryTask
         public void Release()
         {
             if (State != PartState.Held) return;
-            Holder = HandSide.None; State = PartState.Dropped; InsideSeconds = FloorSeconds = Separation = 0;
+            Holder = HandSide.None; State = PartState.Dropped; InsideSeconds = FloorSeconds = Separation = 0; SetHeldVisual(false);
             Body.useGravity = true;
             // Keep the hand's motion, but cap it so a tracking spike cannot launch the part.
             Body.linearVelocity = Vector3.ClampMagnitude(Body.linearVelocity, MaxReleaseSpeed);
@@ -137,7 +148,7 @@ namespace FactoryTask
         {
             Initialize(); SetPhysical(false); Holder = LastHand = HandSide.None;
             State = PartState.Pooled; InsideSeconds = FloorSeconds = HoldSeconds = TravelMetres = Separation = 0;
-            Completed = false; vanishTime = -1;
+            Completed = false; vanishTime = -1; SetHeldVisual(false);
             gameObject.SetActive(false);
         }
         public void Recover(Vector3 safePosition)
@@ -152,7 +163,7 @@ namespace FactoryTask
             weightKg=kind==0?1:kind==1?3:5;
             transform.localScale=Vector3.one*(.17f+kind*.035f);
             bodyRenderer.sharedMaterial=weightMaterials[kind];
-            State=state;gameObject.SetActive(state!=PartState.Pooled);
+            State=state;gameObject.SetActive(state!=PartState.Pooled);SetHeldVisual(state==PartState.Held);
             transform.SetPositionAndRotation(position,rotation);Body.position=position;Body.rotation=rotation;
         }
     }

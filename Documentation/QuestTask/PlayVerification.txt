@@ -8,7 +8,7 @@ PASS Spectator output is isolated from headset rendering
 PASS Avatar soles are aligned to the calibrated floor
 PASS Belt friction pushes dynamic parts off the conveyor end onto the table
 PASS Supply continues while parts accumulate
-PASS Parts collide instead of interpenetrating (max 0.006 m)
+PASS Parts collide instead of interpenetrating (max 0.000 m)
 PASS Simultaneous grips cannot own the same part twice
 PASS Held part stays a dynamic body driven toward the hand
 PASS Held part follows a fast hand move and stays seated in the palm
@@ -22,16 +22,18 @@ PASS Floor drop does not count as completion
 PASS Dropped part can be grabbed again
 PASS A held part inside the box is not counted
 PASS Released part inside completion box records left-hand task
-PASS Completed part returns to the reusable pool
+PASS Completed part stays in the bin and cannot be re-counted
 PASS Post-release load persists and decays gradually
 PASS Right Grip can pick the next part
 PASS Right-hand work drives right-side scores
 PASS Right completion is recorded separately
 PASS Recent repetition history is isolated by hand
 PASS Repetition history expires after 60 seconds
-PASS Completed parts return to the reusable pool
+PASS Spectator dummy starts a pick-and-place sequence
+PASS Dummy sequence finishes and returns to idle
+PASS Both completed parts rest in the bin; every part is the single 5 kg size
 PASS Line keeps supplying parts
-PASS Accumulated parts still do not interpenetrate (max 0.007 m Conveying@(2.72, 1.09, -3.26) / Conveying@(2.54, 1.11, -3.30))
+PASS Accumulated parts still do not interpenetrate (max 0.002 m Conveying@(3.82, 1.12, -3.13) / Conveying@(3.58, 1.13, -3.23))
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS RULA produces a bounded full-body grand score

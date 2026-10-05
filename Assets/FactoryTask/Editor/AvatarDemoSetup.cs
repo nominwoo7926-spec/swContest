@@ -87,6 +87,10 @@ public static class AvatarDemoSetup
         worker.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
         var recorder=taskRoot.gameObject.AddComponent<VRSessionRecorder>();
         recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.avatar=ik;recorder.bodySource=bodySource;recorder.bodyRetargeter=bodyRetargeter;
+        // The tracked avatar keeps solving every frame (RULA, load estimate) but is no longer filmed;
+        // the spectator camera shows the animation-driven dummy instead.
+        foreach(var skin in worker.GetComponentsInChildren<Renderer>(true))skin.enabled=false;
+        BuildSpectatorDummy(taskRoot,prefab,tracker);
         var map=tracking.actions.actionMaps[0];
         if(tracking.actions.FindAction("RecordToggle")==null){map.AddAction("RecordToggle",UnityEngine.InputSystem.InputActionType.Button,"<XRController>{RightHand}/secondaryButton");File.WriteAllText(AssetDatabase.GetAssetPath(tracking.actions),tracking.actions.ToJson());AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(tracking.actions));}
         // Both cameras retain one shared tracking/input system. The observer renders only to its texture.
@@ -112,6 +116,79 @@ public static class AvatarDemoSetup
         var viewer=cameraObject.AddComponent<SpectatorCameraController>();viewer.spectatorCamera=camera;viewer.output=texture;viewer.spectatorPanel=panel;viewer.session=recorder;
         // No observer render is performed on the standalone headset at runtime.
         EditorUtility.SetDirty(tracking.actions);AssetDatabase.SaveAssets();
+    }
+    const string IdleClipPath=Root+"/Animations/Worker_Idle.fbx";
+    // Spectator-only worker: same skinned model and load colours, driven by an Animator
+    // (Idle <-> PickAndPlace) plus IK instead of headset tracking.
+    static void BuildSpectatorDummy(Transform taskRoot,GameObject prefab,XRGrabTaskTracker tracker)
+    {
+        var idle=ImportIdleClip();
+        if(idle==null){Debug.LogWarning("Spectator dummy skipped: "+IdleClipPath+" is missing.");return;}
+        var dummy=(GameObject)PrefabUtility.InstantiatePrefab(prefab,taskRoot);dummy.name="Spectator_Worker_Dummy";
+        PrefabUtility.UnpackPrefabInstance(dummy,PrefabUnpackMode.Completely,InteractionMode.AutomatedAction);
+        // Remove every tracking driver (IK, Movement retargeting, finger pass); keep skin and heatmap.
+        for(int pass=0;pass<3;pass++)
+            foreach(var behaviour in dummy.GetComponentsInChildren<MonoBehaviour>(true).Reverse())
+                if(behaviour!=null&&!(behaviour is AvatarLoadHeatmap))Object.DestroyImmediate(behaviour);
+        dummy.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
+        foreach(var skin in dummy.GetComponentsInChildren<Renderer>(true))skin.enabled=true;
+        var standing=tracker.calibration.standingPoint;
+        // A step closer to the line than the VR user's spot, so both hands reach the table and bin.
+        dummy.transform.SetPositionAndRotation(standing.position+standing.forward*.22f,standing.rotation);
+        var animator=dummy.GetComponentInChildren<Animator>(true);
+        animator.enabled=true;animator.runtimeAnimatorController=BuildDirectorController(idle);
+        animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;
+        // The carried part: the task part's look at the single 5 kg size, without physics.
+        var partPrefab=tracker.pool.prefab;
+        var carried=(GameObject)PrefabUtility.InstantiatePrefab(partPrefab.gameObject,dummy.transform);
+        PrefabUtility.UnpackPrefabInstance(carried,PrefabUnpackMode.Completely,InteractionMode.AutomatedAction);
+        carried.name="Carried_Part_Visual";var look=carried.GetComponent<ConveyorPart>();
+        int kind=tracker.pool.partKind;look.bodyRenderer.sharedMaterial=look.weightMaterials[kind];
+        float size=.17f+kind*.035f;carried.transform.localScale=Vector3.one*size;
+        Object.DestroyImmediate(look);Object.DestroyImmediate(carried.GetComponent<Collider>());Object.DestroyImmediate(carried.GetComponent<Rigidbody>());
+        SetLayer(carried,AvatarLayer);carried.SetActive(false);
+        var director=animator.gameObject.AddComponent<ThirdPersonAvatarDirector>();
+        director.pickupTable=GameObject.Find("Pickup_Table").GetComponent<Collider>();
+        director.binVolume=tracker.completionVolume;director.spawner=tracker.pool;
+        director.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();
+        director.binRimHeight=GameObject.Find("Completion_Box").GetComponentsInChildren<Renderer>().Max(r=>r.bounds.max.y);
+        director.visualPart=carried;director.partSize=size;
+        var bridge=dummy.AddComponent<GrabToDirectorBridge>();bridge.task=tracker;bridge.director=director;
+    }
+    static AnimationClip ImportIdleClip()
+    {
+        var importer=AssetImporter.GetAtPath(IdleClipPath) as ModelImporter;
+        if(importer==null)return null;
+        bool changed=importer.animationType!=ModelImporterAnimationType.Human;
+        if(changed){importer.animationType=ModelImporterAnimationType.Human;importer.avatarSetup=ModelImporterAvatarSetup.CreateFromThisModel;importer.SaveAndReimport();}
+        var clips=importer.defaultClipAnimations;
+        foreach(var clip in clips)
+        {
+            // Loop in place: the dummy's position and heading are owned by the director.
+            clip.loopTime=true;clip.lockRootRotation=clip.lockRootHeightY=clip.lockRootPositionXZ=true;
+            clip.keepOriginalOrientation=clip.keepOriginalPositionY=clip.keepOriginalPositionXZ=true;
+        }
+        importer.clipAnimations=clips;importer.SaveAndReimport();
+        return AssetDatabase.LoadAllAssetsAtPath(IdleClipPath).OfType<AnimationClip>().FirstOrDefault(c=>!c.name.StartsWith("__preview__"));
+    }
+    // Idle --(Trigger PickAndPlace, no exit time, 0.15 s blend)--> PickAndPlace
+    // PickAndPlace --(exit time at the end of one cycle, short blend)--> Idle. IK pass on.
+    static UnityEditor.Animations.AnimatorController BuildDirectorController(AnimationClip idle)
+    {
+        string path=Root+"/Generated/Worker_Director.controller";
+        AssetDatabase.DeleteAsset(path);
+        var controller=UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(path);
+        controller.AddParameter("PickAndPlace",AnimatorControllerParameterType.Trigger);
+        controller.AddParameter(new AnimatorControllerParameter{name="ActionSpeed",type=AnimatorControllerParameterType.Float,defaultFloat=1});
+        var layers=controller.layers;layers[0].iKPass=true;controller.layers=layers;
+        var machine=controller.layers[0].stateMachine;
+        var idleState=machine.AddState("Idle");idleState.motion=idle;machine.defaultState=idleState;
+        var action=machine.AddState("PickAndPlace");action.motion=idle;action.speedParameter="ActionSpeed";action.speedParameterActive=true;
+        var start=idleState.AddTransition(action);start.AddCondition(UnityEditor.Animations.AnimatorConditionMode.If,0,"PickAndPlace");
+        start.hasExitTime=false;start.duration=.15f;start.hasFixedDuration=true;
+        var end=action.AddTransition(idleState);end.hasExitTime=true;end.exitTime=.95f;end.duration=.05f;
+        AssetDatabase.SaveAssets();
+        return controller;
     }
     static void SetLayer(GameObject go,int layer){foreach(var t in go.GetComponentsInChildren<Transform>(true))t.gameObject.layer=layer;}
 
