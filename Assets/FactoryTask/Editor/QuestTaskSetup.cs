@@ -135,10 +135,10 @@ public static class QuestTaskSetup
         lineHeight.moved=new[]{conveyor,surface.transform,spawner.spawnPoint,task.recoveryPoint,done}.Concat(equipment.Cast<Transform>().Where(t=>t.name=="Pickup_Table"||t.name.StartsWith("Table_"))).ToArray();
         lineHeight.stretched=conveyorParts.Where(t=>t.name=="Leg").Concat(equipment.Cast<Transform>().Where(t=>t.name=="Pickup_Leg")).Concat(done.Cast<Transform>().Where(t=>t.name=="Box_Stand")).ToArray();
         lineHeight.fixedToFloor=conveyorParts.Where(t=>t.name=="Levelling_Plate"||t.name=="Adjuster").ToArray();
-        lineHeight.tableTop=equipment.Find("Pickup_Table").GetComponent<Collider>();
+        lineHeight.tableTop=equipment.Find("Pickup_Table").GetComponent<Collider>();lineHeight.baseTableTop=tableTop;
         var session=systems.gameObject.AddComponent<WorkSessionController>();
         session.conveyor=controller;session.spawner=spawner;session.task=task;session.rula=rula;session.line=lineHeight;
-        session.estimator=estimator;session.dataLogger=systems.gameObject.AddComponent<RunDataLogger>();
+        session.estimator=estimator;session.dataLogger=systems.gameObject.AddComponent<RunDataLogger>();session.calibration=calibration;
         session.baselineSpeed=ConveyorController.FixedSpeed;session.baselineInterval=2;session.travelDistance=lineEnd-spawner.spawnPoint.position.x;
         BuildButtonPanel(root,session,tracking);
         BuildConfirmDisplay(root,session,tracking);

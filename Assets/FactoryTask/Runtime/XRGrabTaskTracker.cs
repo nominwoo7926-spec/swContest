@@ -85,15 +85,19 @@ namespace FactoryTask
             UpdateBin(dt);
             UpdateSpectatorVisibility();
         }
-        // Third-person view: hide real parts that are held or in the bin (the dummy shows its own).
-        // Also called by the session recorder while replaying, when this component is disabled.
+        // Third-person view: real parts are shown only while they ride the belt. From the table on,
+        // the dummy shows a clean pick-and-place instead, so drops, bounces and parts held in the
+        // headset never appear there. Also called by the session recorder while replaying.
         public void UpdateSpectatorVisibility()
         {
             if(pool==null||pool.Parts==null)return;
             for(int i=0;i<pool.Parts.Length;i++)
             {
                 var part=pool.Parts[i];if(!part.gameObject.activeSelf)continue;
-                part.SetSpectatorHidden(part.State==PartState.Held||InBin(part));
+                bool onBelt=false;
+                if(conveyor!=null&&conveyor.driveSurfaces!=null)
+                    foreach(var surface in conveyor.driveSurfaces)if(surface!=null&&Above(part.Shape.bounds,surface.bounds))onBelt=true;
+                part.SetSpectatorHidden(!onBelt);
             }
         }
         // Where a part may rest: on the belt, on the pickup table, or in the bin.

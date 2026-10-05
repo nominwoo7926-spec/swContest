@@ -5,12 +5,11 @@ using UnityEngine.Events;
 namespace FactoryTask
 {
     // Spectator-only "visual dummy" worker. The tracked avatar keeps driving RULA and the load
-    // estimate in the background (hidden); this one performs a clean, two-handed standing
-    // pick-and-place that follows the VR user's own pace:
-    //   real grab    -> reach to the table, pick a part, carry it above the bin
-    //   still held   -> hold it above the bin
-    //   real release -> lower it to the rim and let it drop into the near row of the bin
-    // Grabs that arrive mid-sequence are queued, so every real carry is mirrored once.
+    // estimate in the background (hidden); this one gives the third-person view a clean version of
+    // the task, independent of how messy the headset session is: every part that comes off the belt
+    // onto the table is picked up there with both hands, carried over the bin rim and dropped into
+    // the bin's near row. Arrivals during a sequence are queued; one sequence fits within the
+    // measured interval between arrivals. While the line changes height the dummy steps back.
     //
     // Animator: Idle --(Trigger PickAndPlace)--> PickAndPlace --(Bool Performing false)--> Idle.
     // Both states play the standing idle clip; reach, lift, turn and place are humanoid IK aimed at
@@ -18,7 +17,7 @@ namespace FactoryTask
     [RequireComponent(typeof(Animator))]
     public sealed class ThirdPersonAvatarDirector : MonoBehaviour
     {
-        public enum Stage { Idle, Reach, Carry, Hold, Lower, Return }
+        public enum Stage { Idle, Reach, Carry, Lower, Return }
         static readonly int PickAndPlaceTrigger = Animator.StringToHash("PickAndPlace");
         static readonly int Performing = Animator.StringToHash("Performing");
 
@@ -35,9 +34,15 @@ namespace FactoryTask
         [Tooltip("Parts shown in the bin in the third-person view; the oldest fades out first.")]
         public int binShowCount = 2;
 
-        [Header("Timing at a 3 s work pace (scaled to the user's pace)")]
+        [Header("Timing (scaled so one sequence fits the arrival interval)")]
         public float reachSeconds = .7f, carrySeconds = 1f, lowerSeconds = .45f, returnSeconds = .6f;
-        public float maxHoldSeconds = 8;
+        [Tooltip("Arrivals waiting beyond this are skipped so the dummy never falls far behind.")]
+        public int maxQueued = 2;
+
+        [Header("Line height change")]
+        public LineHeightAdjuster line;
+        [Tooltip("How far the dummy steps back while the line is moving.")]
+        public float stepBack = .5f;
 
         [Header("Pose")]
         public float maxTurnDegrees = 35;
@@ -54,16 +59,19 @@ namespace FactoryTask
         public bool isPerformingAction => stage != Stage.Idle;
         public Stage CurrentStage => stage;
         public int ShownInBin => shown.Count;
-        // Seconds per real carry, smoothed over the user's recent grabs.
-        public float Pace { get; private set; } = 3;
+        // Seconds between parts arriving on the table, smoothed.
+        public float Pace { get; private set; } = 2;
+        public int Queued => arrivals.Count;
 
         Animator animator;
         Transform body, binVisuals;
         Quaternion baseRotation;
+        Vector3 basePosition;
         Stage stage;
-        float stageTime, handWeight, lastGrab = -1, yawFrom, yawTo;
-        bool releaseRequested, pickedUp;
-        int pending, slot;
+        float stageTime, handWeight, lastArrival = -1, retreat;
+        bool pickedUp;
+        int slot;
+        readonly Queue<Vector3> arrivals = new Queue<Vector3>();
         Vector3 pickPoint, liftPoint, overBinPoint, releasePoint, partPoint;
         Vector3[] slotRest = new Vector3[2];
         readonly List<Placed> shown = new List<Placed>();
@@ -76,7 +84,7 @@ namespace FactoryTask
             animator = GetComponent<Animator>();
             animator.applyRootMotion = false;
             body = transform.parent != null ? transform.parent : transform;
-            baseRotation = body.rotation;
+            baseRotation = body.rotation; basePosition = body.position;
             leftHand = animator.GetBoneTransform(HumanBodyBones.LeftHand); rightHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
             leftIndex = animator.GetBoneTransform(HumanBodyBones.LeftIndexProximal); rightIndex = animator.GetBoneTransform(HumanBodyBones.RightIndexProximal);
             leftLittle = animator.GetBoneTransform(HumanBodyBones.LeftLittleProximal); rightLittle = animator.GetBoneTransform(HumanBodyBones.RightLittleProximal);
@@ -92,39 +100,43 @@ namespace FactoryTask
         float RimHeight => binVolume != null ? binVolume.bounds.min.y + rimAboveVolume : binRimHeight;
         float FloorHeight => binVolume != null ? binVolume.bounds.min.y + floorAboveVolume : binFloorHeight;
 
-        // The VR user picked up a part. Starts a sequence, or queues one if a sequence is running.
-        public void TriggerPickAndPlaceSequence()
+        // A part came off the belt onto the table at this position: pick it up (now, or after the
+        // sequences already queued).
+        public void QueueArrival(Vector3 partCentre)
         {
             float now = Time.time;
-            if (lastGrab >= 0) Pace = Mathf.Lerp(Pace, Mathf.Clamp(now - lastGrab, 1.2f, 10f), .4f);
-            lastGrab = now;
+            if (lastArrival >= 0) Pace = Mathf.Lerp(Pace, Mathf.Clamp(now - lastArrival, 1f, 10f), .4f);
+            lastArrival = now;
             if (!isActiveAndEnabled) return;
-            if (stage == Stage.Idle) Begin(); else pending = Mathf.Min(pending + 1, 2);
+            if (arrivals.Count >= maxQueued) arrivals.Dequeue();
+            arrivals.Enqueue(partCentre);
+        }
+
+        // Starts one sequence on a part at the front edge of the table (Animation-Event style entry).
+        public void TriggerPickAndPlaceSequence()
+        {
+            if (pickupTable == null) return;
+            Bounds t = pickupTable.bounds;
+            QueueArrival(new Vector3(t.min.x + partSize, t.max.y + partSize * .5f, t.min.z + partSize));
         }
 
         // A new work run: clear the parts shown in the bin and return to idle.
         public void ResetBin()
         {
             foreach (var p in shown) if (p.part != null) Destroy(p.part.gameObject);
-            shown.Clear(); pending = 0;
+            shown.Clear(); arrivals.Clear(); lastArrival = -1;
             if (visualPart != null) visualPart.SetActive(false);
             if (stage != Stage.Idle) { stage = Stage.Idle; animator.SetBool(Performing, false); }
         }
 
-        // The VR user let go of the part: lower and place as soon as it is above the bin.
-        public void NotifyRelease()
+        void Begin(Vector3 arrival)
         {
-            if (stage == Stage.Reach || stage == Stage.Carry || stage == Stage.Hold) releaseRequested = true;
-        }
-
-        void Begin()
-        {
-            stage = Stage.Reach; stageTime = 0; releaseRequested = pickedUp = false;
+            stage = Stage.Reach; stageTime = 0; pickedUp = false;
             // Make room before this part arrives: the oldest of a full bin starts fading now.
             int visible = 0; foreach (var p in shown) if (p.fade < 0) visible++;
             if (visible >= binShowCount) foreach (var p in shown) if (p.fade < 0) { p.fade = 0; break; }
             slot = FreeSlot();
-            ComputeTargets();
+            ComputeTargets(arrival);
             animator.SetBool(Performing, true);
             animator.SetTrigger(PickAndPlaceTrigger);
         }
@@ -140,14 +152,14 @@ namespace FactoryTask
             return 0;
         }
 
-        // Pick from the table corner nearest the worker; place in the bin's near row, two side by side.
-        void ComputeTargets()
+        // Pick where the part arrived (kept on the table top); place in the bin's near row, two side by side.
+        void ComputeTargets(Vector3 arrival)
         {
             float half = partSize * .5f;
             if (pickupTable != null)
             {
                 Bounds t = pickupTable.bounds;
-                pickPoint = new Vector3(t.min.x + half + .04f, t.max.y + half + .002f, t.min.z + half + .05f);
+                pickPoint = new Vector3(Mathf.Clamp(arrival.x, t.min.x + half, t.max.x - half), t.max.y + half + .002f, Mathf.Clamp(arrival.z, t.min.z + half, t.max.z - half));
             }
             if (binVolume != null)
             {
@@ -164,13 +176,24 @@ namespace FactoryTask
             overBinPoint = new Vector3(target.x, clear, target.z);
         }
 
-        float Scale => Mathf.Clamp(Pace / 3f, .55f, 1.5f);
+        // One whole sequence takes about 90 % of the arrival interval.
+        float Scale => Mathf.Clamp(Pace * .9f / (reachSeconds + carrySeconds + lowerSeconds + returnSeconds), .45f, 1.5f);
 
         void Update()
         {
             float dt = Time.deltaTime;
             UpdateBinParts(dt);
-            if (stage == Stage.Idle) { Relax(dt); return; }
+            // Step back while the line is raised or lowered, return once it has stopped.
+            bool lineMoving = line != null && line.Moving;
+            retreat = Mathf.MoveTowards(retreat, lineMoving ? stepBack : 0, dt * .6f);
+            Vector3 back = Vector3.ProjectOnPlane(baseRotation * Vector3.forward, Vector3.up).normalized;
+            body.position = basePosition - back * retreat;
+            if (stage == Stage.Idle)
+            {
+                Relax(dt);
+                if (arrivals.Count > 0 && !lineMoving && retreat <= .001f) Begin(arrivals.Dequeue());
+                return;
+            }
             stageTime += dt;
             float pickYaw = YawTo(pickPoint), placeYaw = YawTo(releasePoint);
             switch (stage)
@@ -189,13 +212,9 @@ namespace FactoryTask
                     // Straight up off the table, then across to above the bin.
                     partPoint = u < .35f ? Vector3.Lerp(pickPoint, liftPoint, Smooth(u / .35f)) : Vector3.Lerp(liftPoint, overBinPoint, Smooth((u - .35f) / .65f));
                     SetYaw(Mathf.Lerp(pickYaw, placeYaw, Smooth((u - .2f) / .8f)));
-                    if (u >= 1) Next(Stage.Hold);
+                    if (u >= 1) Next(Stage.Lower);
                     break;
                 }
-                case Stage.Hold:
-                    partPoint = overBinPoint; SetYaw(placeYaw);
-                    if (releaseRequested || stageTime > maxHoldSeconds) Next(Stage.Lower);
-                    break;
                 case Stage.Lower:
                 {
                     float u = stageTime / (lowerSeconds * Scale);
@@ -212,7 +231,6 @@ namespace FactoryTask
                     if (u >= 1)
                     {
                         stage = Stage.Idle; animator.SetBool(Performing, false);
-                        if (pending > 0) { pending--; Begin(); }
                     }
                     break;
                 }

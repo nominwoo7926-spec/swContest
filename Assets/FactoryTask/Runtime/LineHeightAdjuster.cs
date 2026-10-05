@@ -22,8 +22,11 @@ namespace FactoryTask
         public float TargetOffset { get; private set; }
         public bool Moving => !Mathf.Approximately(Offset, TargetOffset);
         public float TableTopHeight => tableTop != null ? tableTop.bounds.max.y : 0;
+        [Tooltip("Table top height with no offset, stored by scene setup. Collider bounds read in Awake can still be empty, which once made the line jump to its limit.")]
+        public float baseTableTop;
         // Table height with no offset applied.
-        public float BaseTableTopHeight { get; private set; }
+        public float BaseTableTopHeight => baseTableTop > 0 ? baseTableTop : capturedTableTop;
+        float capturedTableTop;
 
         Vector3[] movedBase, fixedBase, stretchBase, stretchScale;
         float[] stretchBottom, stretchTop;
@@ -47,7 +50,7 @@ namespace FactoryTask
                 Bounds b = r != null ? r.bounds : new Bounds(t.position, Vector3.zero);
                 stretchBottom[i] = b.min.y; stretchTop[i] = b.max.y;
             }
-            BaseTableTopHeight = TableTopHeight;
+            capturedTableTop = TableTopHeight;
         }
 
         // Ease to a new height at the station's lifting speed.

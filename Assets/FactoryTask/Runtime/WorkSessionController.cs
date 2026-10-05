@@ -33,6 +33,7 @@ namespace FactoryTask
         public RunDataLogger dataLogger;
         // Asks the worker (behind them) before the one-shot height change; the run waits for YES.
         public HeightConfirmPanel confirmPanel;
+        public UserCalibration calibration;
 
         [Header("Run")]
         public int quota = 100;
@@ -105,7 +106,7 @@ namespace FactoryTask
             AwaitingConfirmation = resumeAfterLift = false; pausedSeconds = 0;
             if (confirmPanel != null) confirmPanel.Hide();
             Alpha = Beta = 0; RequiredSpeed = OptimalSpeed = baselineSpeed;
-            spawner.spawnLimit = quota; spawner.forceSpawn = true;
+            spawner.remainingToSupply = quota; spawner.forceSpawn = true;
             conveyor.SetSpeedImmediate(baselineSpeed); conveyor.SupplyEnabled = true;
             State = RunState.Running; startedAt = Time.time;
             if (recorder != null) recorder.RestartRecording();
@@ -117,6 +118,9 @@ namespace FactoryTask
             float dt = Time.fixedDeltaTime;
             // Constant spacing on the belt: the supply interval follows the belt speed.
             spawner.intervalSeconds = Spacing / Mathf.Max(.05f, conveyor.CurrentSpeed);
+            // Parts lost on the way (dropped outside the work area, reclaimed) are supplied again, so
+            // the quota can always be completed.
+            spawner.remainingToSupply = RemainingToSupply();
             foreach (var part in spawner.Parts)
             {
                 if (!part.gameObject.activeSelf) continue;
@@ -211,8 +215,13 @@ namespace FactoryTask
         void CalibrateHeight()
         {
             HeightCalibrated = true;
-            if (elbowCount == 0 || line == null) return;
-            ElbowHeight = elbowSum / elbowCount;
+            if (line == null) return;
+            // Plausibility: standing elbow height is about two thirds of eye height. A measurement
+            // outside that band (tracking glitch, arms raised) falls back to the anthropometric value.
+            float eye = calibration != null && calibration.IsCalibrated ? calibration.BaselineHead.y - calibration.standingPoint.position.y : 0;
+            float measured = elbowCount > 0 ? elbowSum / elbowCount : 0;
+            ElbowHeight = eye <= 0 ? measured : measured >= eye * .58f && measured <= eye * .74f ? measured : eye * .66f;
+            if (ElbowHeight <= 0) return;
             float target = ElbowHeight - elbowClearance;
             line.SetTargetOffset(target - line.BaseTableTopHeight);
             Debug.Log($"[AI] Height calibrated: elbow {ElbowHeight:F3} m -> table top {target:F3} m (offset {line.TargetOffset:+0.000;-0.000} m)");
@@ -224,7 +233,7 @@ namespace FactoryTask
             FitLoadModel(samples, ridge, out float alpha, out float beta);
             Alpha = alpha; Beta = beta;
             float meanHandling = 0; foreach (var s in samples) meanHandling += s.y; meanHandling /= Mathf.Max(1, samples.Count);
-            int remaining = Mathf.Max(0, quota - spawner.SpawnedCount);
+            int remaining = RemainingToSupply();
             // The last part must be supplied, travel to the table and be handled before the deadline.
             float timeLeft = deadlineSeconds - Elapsed - meanHandling;
             RequiredSpeed = timeLeft > .5f ? (Spacing * remaining + travelDistance) / timeLeft : maxSpeed;
@@ -233,6 +242,14 @@ namespace FactoryTask
             OptimalSpeed = Mathf.Clamp(OptimalBeltSpeed(alpha, RequiredSpeed, w1, w2, latePenalty * urgency, earlyPenalty), minSpeed, maxSpeed);
             conveyor.TargetSpeed = OptimalSpeed;
             Debug.Log($"[AI] #{Completed}: r = {alpha:F2} v + {beta:F2}, v_req {RequiredSpeed:F3}, v* {OptimalSpeed:F3} m/s");
+        }
+
+        // Parts still to be supplied: the quota minus parts completed and parts still in play.
+        int RemainingToSupply()
+        {
+            int inPlay = 0;
+            foreach (var part in spawner.Parts) if (part.gameObject.activeSelf && !part.Completed && !part.Vanishing) inPlay++;
+            return Mathf.Max(0, quota - Completed - inPlay);
         }
 
         // Least-squares line r = alpha * v + beta, with a small ridge term on the slope.

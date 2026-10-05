@@ -147,7 +147,9 @@ public static class AvatarDemoSetup
         director.binRimHeight=binRenderers.Max(r=>r.bounds.max.y);
         director.binFloorHeight=binRenderers.First(r=>r.name=="Box_Base").bounds.max.y;
         director.visualPart=carried;director.partSize=size;
-        var bridge=dummy.AddComponent<GrabToDirectorBridge>();bridge.task=tracker;bridge.director=director;
+        director.line=taskRoot.GetComponentInChildren<LineHeightAdjuster>();
+        var arrivals=dummy.AddComponent<TableArrivalTrigger>();arrivals.pool=tracker.pool;arrivals.director=director;
+        arrivals.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();arrivals.pickupTable=director.pickupTable;
         BuildLoadFigure(prefab,taskRoot,tracker,controller);
     }
     // A copy of the worker with every tracking driver removed (IK, Movement retargeting, finger

@@ -38,20 +38,26 @@ namespace FactoryTask
             Paint(redCap, Red, session.State == WorkSessionController.RunState.Running);
         }
 
-        // True on the frame a controller first touches the button; the cap sinks while touched.
+        // True once per press. A press must be released by moving the hand clearly away (hysteresis),
+        // and presses within the cooldown are ignored, so hand jitter at the edge cannot restart a run
+        // several times. The cap sinks while touched.
         bool Pressed(Transform button, Vector3 rest, ref bool down)
         {
-            bool touching = Touching(button, HandSide.Left) || Touching(button, HandSide.Right);
+            bool touching = Within(button, down ? pressRadius * releaseFactor : pressRadius);
             button.localPosition = rest - Vector3.up * (touching ? travel : 0);
-            bool pressed = touching && !down;
+            bool pressed = touching && !down && Time.unscaledTime >= nextPress;
+            if (pressed) nextPress = Time.unscaledTime + cooldown;
             down = touching;
             return pressed;
         }
+        public float releaseFactor = 1.6f, cooldown = 1.5f;
+        float nextPress;
 
-        bool Touching(Transform button, HandSide side)
+        bool Within(Transform button, float radius)
         {
-            if (!tracking.Tracked(side)) return false;
-            return (tracking.Hand(side).position - button.position).sqrMagnitude < pressRadius * pressRadius;
+            foreach (var side in new[] { HandSide.Left, HandSide.Right })
+                if (tracking.Tracked(side) && (tracking.Hand(side).position - button.position).sqrMagnitude < radius * radius) return true;
+            return false;
         }
 
         void Paint(Renderer cap, Color colour, bool lit)

@@ -146,7 +146,11 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Pass(Mathf.Abs(lineHeight.Offset)<.001f&&task.pool.SpawnedCount>=2,"Red starts a run at the default height and supplies parts");
         session.StartRun();
         Pass(task.pool.SpawnedCount==0&&task.pool.Parts.All(p=>!p.gameObject.activeSelf)&&task.CompletedTotal==0,"Red during a run clears every part and count and restarts");
-        Pass(task.pool.spawnLimit==100&&task.pool.finalPartMaterial!=null,"Quota is 100 parts and the last one has its own colour");
+        Pass(session.quota==100&&task.pool.remainingToSupply==100&&task.pool.finalPartMaterial!=null,"Quota is 100 parts and the last one has its own colour");
+        yield return new WaitForSeconds(5);
+        var lost=task.pool.Parts.FirstOrDefault(p=>p.gameObject.activeSelf&&p.State==PartState.Conveying);
+        int owedBefore=task.pool.remainingToSupply;if(lost!=null)lost.ReturnToPool();yield return new WaitForFixedUpdate();yield return new WaitForFixedUpdate();
+        Pass(lost!=null&&task.pool.remainingToSupply>=owedBefore+1,"A part lost from the line is supplied again, so 100 can still be completed");
         until=Time.time+50;
         while(ArrivedPart()==null&&Time.time<until)yield return null;yield return new WaitForSeconds(1);
         Pass(ArrivedPart()!=null&&!ArrivedPart().Body.isKinematic,"Belt friction pushes dynamic parts off the conveyor end onto the table");
@@ -220,26 +224,19 @@ public sealed class QuestTaskVerification : MonoBehaviour
             // so the captured pose matches the carried part exactly.
             float previousScale=Time.timeScale;Time.timeScale=1;
             var dummyAnimator=director.GetComponent<Animator>();
-            for(int cycle=0;cycle<3;cycle++)
-            {
-                director.TriggerPickAndPlaceSequence();
-                if(cycle==0)Pass(director.isPerformingAction,"Spectator dummy starts when a part is picked up");
-                until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Carry&&Time.time<until)yield return null;
-                if(cycle==0){yield return new WaitForSeconds(.35f);dummyAnimator.Update(0);CaptureSpectator("Dummy_1_Carry");}
-                until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Hold&&Time.time<until)yield return null;
-                if(cycle==0)
-                {
-                    yield return new WaitForSeconds(1);dummyAnimator.Update(0);CaptureSpectator("Dummy_2_Hold");
-                    Pass(director.CurrentStage==ThirdPersonAvatarDirector.Stage.Hold,"Dummy holds its part above the bin until the real part is released");
-                }
-                director.NotifyRelease();
-                until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Return&&Time.time<until)yield return null;
-                if(cycle==0){dummyAnimator.Update(0);CaptureSpectator("Dummy_3_Released");}
-                until=Time.time+10;while(director.isPerformingAction&&Time.time<until)yield return null;
-            }
-            yield return new WaitForSeconds(1);dummyAnimator.Update(0);CaptureSpectator("Dummy_4_Bin");
+            // Parts arriving on the table start the dummy by themselves (the line is running).
+            until=Time.time+20;while(!director.isPerformingAction&&Time.time<until)yield return null;
+            Pass(director.isPerformingAction,"Spectator dummy starts when a part arrives on the table");
+            until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Carry&&Time.time<until)yield return null;
+            yield return new WaitForSeconds(.3f);dummyAnimator.Update(0);CaptureSpectator("Dummy_1_Carry");
+            until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Lower&&Time.time<until)yield return null;
+            dummyAnimator.Update(0);CaptureSpectator("Dummy_2_Lower");
+            until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Return&&Time.time<until)yield return null;
+            dummyAnimator.Update(0);CaptureSpectator("Dummy_3_Released");
+            yield return new WaitForSeconds(5);dummyAnimator.Update(0);CaptureSpectator("Dummy_4_Bin");
             Time.timeScale=previousScale;
-            Pass(!director.isPerformingAction,"Dummy sequence finishes and returns to idle");
+            var offBelt=task.pool.Parts.FirstOrDefault(p=>p.gameObject.activeSelf&&p.Body.position.x>controller.driveSurfaces[0].bounds.max.x+.05f);
+            Pass(offBelt==null||offBelt.gameObject.layer==offBelt.heldLayer,"Real parts that left the belt are hidden from the third-person view");
             Pass(director.ShownInBin>=1&&director.ShownInBin<=2,"Third-person bin shows at most two placed parts ("+director.ShownInBin+")");
             Pass(FindFirstObjectByType<BodyLoadVisualizer>().figure.texture!=null,"Load panel shows the worker figure");
         }

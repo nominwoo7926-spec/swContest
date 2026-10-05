@@ -11,8 +11,8 @@ namespace FactoryTask
         public float intervalSeconds = 2f;
         // Every supplied part uses one variant: 0 = 1 kg / 17 cm, 1 = 3 kg / 20.5 cm, 2 = 5 kg / 24 cm.
         [Range(0, 2)] public int partKind = 2;
-        [Tooltip("Parts supplied in one run (0 = unlimited). The last one uses finalPartMaterial.")]
-        public int spawnLimit;
+        [Tooltip("Parts still needed to finish the run (-1 = unlimited), set by the work session from the parts completed and still in play, so lost parts are replaced. The last needed part uses finalPartMaterial.")]
+        public int remainingToSupply = -1;
         public Material finalPartMaterial;
         [Tooltip("Supply on time even when the line is backed up: the part is placed on top of the pile.")]
         public bool forceSpawn;
@@ -21,7 +21,7 @@ namespace FactoryTask
         public ConveyorPart[] Parts { get; private set; }
         public int SpawnedCount { get; private set; }
         public int ReusedCount { get; private set; }
-        public bool QuotaReached => spawnLimit > 0 && SpawnedCount >= spawnLimit;
+        public bool QuotaReached => remainingToSupply == 0;
         bool[] used;
         float countdown;
         readonly Collider[] overlaps = new Collider[16];
@@ -65,7 +65,7 @@ namespace FactoryTask
             }
             var part = TakeFreePart();
             if (part == null) return;
-            bool last = spawnLimit > 0 && SpawnedCount + 1 == spawnLimit;
+            bool last = remainingToSupply == 1;
             part.Supply(partKind, position, spawnPoint.rotation, last ? finalPartMaterial : null);
             part.SpawnIndex = SpawnedCount;
             SpawnedCount++; countdown = intervalSeconds;
