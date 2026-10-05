@@ -39,6 +39,7 @@ public sealed class QuestTaskVerification : MonoBehaviour
         float decay=BodyLoadEstimator.SmoothLoad(70,0,1);Check(decay>0&&decay<70,"Load decays gradually rather than clearing on release");
         Check(BodyLoadVisualizer.ColorFor(0).g>BodyLoadVisualizer.ColorFor(0).r&&BodyLoadVisualizer.ColorFor(100).r>BodyLoadVisualizer.ColorFor(100).g,"Color endpoints are green and red");
         var yellow=BodyLoadVisualizer.ColorFor(50);Check(yellow.r>.9f&&yellow.g>.7f&&yellow.b<.2f,"Midpoint is yellow");
+        Check(Mathf.Approximately(AvatarLoadHeatmap.MapColor(0),0)&&Mathf.Approximately(AvatarLoadHeatmap.MapColor(30),.5f)&&Mathf.Approximately(AvatarLoadHeatmap.MapColor(60),1)&&Mathf.Approximately(AvatarLoadHeatmap.MapColor(100),1),"Heatmap colour reaches full risk at the fatigue threshold of 60 (raw scores unchanged)");
         var line=new[]{new Vector3(.3f,0,1.6f),new Vector3(.4f,0,1.8f),new Vector3(.5f,0,2f)};
         WorkSessionController.FitLoadModel(line,0,out float alpha,out float beta);
         Check(Mathf.Abs(alpha-2)<.001f&&Mathf.Abs(beta-1)<.001f,"Regression recovers r = 2 v + 1 from window data");

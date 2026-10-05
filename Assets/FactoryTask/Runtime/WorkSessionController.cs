@@ -27,6 +27,7 @@ namespace FactoryTask
         public FullBodyAvatarIK avatar;
         public LineHeightAdjuster line;
         public ThirdPersonAvatarDirector director;
+        public VRSessionRecorder recorder;
 
         [Header("Run")]
         public int quota = 100;
@@ -91,6 +92,7 @@ namespace FactoryTask
             spawner.spawnLimit = quota; spawner.forceSpawn = true;
             conveyor.SetSpeedImmediate(baselineSpeed); conveyor.SupplyEnabled = true;
             State = RunState.Running; startedAt = Time.time;
+            if (recorder != null) recorder.RestartRecording();
         }
 
         void FixedUpdate()

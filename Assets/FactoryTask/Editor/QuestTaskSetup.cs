@@ -144,6 +144,8 @@ public static class QuestTaskSetup
         AvatarDemoSetup.Attach(root);
         rula.avatar=root.GetComponentInChildren<FullBodyAvatarIK>();
         session.avatar=rula.avatar;session.director=root.GetComponentInChildren<ThirdPersonAvatarDirector>(true);
+        session.recorder=root.GetComponentInChildren<VRSessionRecorder>(true);
+        task.conveyor=controller;task.pickupTable=lineHeight.tableTop;
         EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.ImportAsset(ScenePath);AssetDatabase.SaveAssets();
         var buildScene=new EditorBuildSettingsScene(ScenePath,true){guid=new GUID(AssetDatabase.AssetPathToGUID(ScenePath))};EditorBuildSettings.scenes=new[]{buildScene};
         Selection.activeGameObject=root.gameObject;

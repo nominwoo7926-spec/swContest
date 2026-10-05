@@ -35,7 +35,7 @@ namespace FactoryTask
         // Counted parts rest in the bin until it is full; they are no longer picked up again.
         public bool Completed { get; private set; }
         public bool Vanishing => vanishTime >= 0;
-        public bool Free => !Completed && (State == PartState.Conveying || State == PartState.Waiting || State == PartState.Dropped);
+        public bool Free => !Completed && !Vanishing && (State == PartState.Conveying || State == PartState.Waiting || State == PartState.Dropped);
         const float VanishSeconds = .8f;
         float vanishTime = -1, fullSize;
         Vector3 previousHand, attachStart, attachEnd;

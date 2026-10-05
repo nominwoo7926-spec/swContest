@@ -37,7 +37,7 @@ namespace FactoryTask
         BinaryWriter writer;
         BinaryReader reader;
         float started, nextSample, nextFlush, toggleHeld, playbackClock;
-        bool toggleConsumed, autoStarted, paused, movementPlaybackActive;
+        bool toggleConsumed, paused, movementPlaybackActive;
         int capacity, frameBytes, fileVersion;
         Frame a, b;
         readonly float[] mixedScores = new float[7];
@@ -95,14 +95,26 @@ namespace FactoryTask
             if(IsPlayback){TickPlayback(Time.unscaledDeltaTime);return;}
             UpdateLiveDriver();
             if(paused)return;
-            if(autoRecord&&!autoStarted&&calibration.IsCalibrated){autoStarted=true;StartRecording();}
+            // Keep a recording running whenever one should be: after a pause (headset off, system menu,
+            // screen capture) or a failed start, retry every couple of seconds instead of only once.
+            if(autoRecord&&!userStopped&&!IsRecording&&calibration.IsCalibrated&&Time.unscaledTime>=nextAutoStart)
+            {nextAutoStart=Time.unscaledTime+2;StartRecording();}
             if(!tracking.RecordToggle){toggleHeld=0;toggleConsumed=false;}
             else if(!toggleConsumed)toggleHeld+=Time.unscaledDeltaTime;
             if(toggleHeld>=1&&!toggleConsumed)
             {
-                toggleConsumed=true;autoStarted=true;
-                if(IsRecording)StopRecording();else if(calibration.IsCalibrated)StartRecording();
+                toggleConsumed=true;
+                if(IsRecording){StopRecording();userStopped=true;}else if(calibration.IsCalibrated){userStopped=false;StartRecording();}
             }
+        }
+        bool userStopped;
+        float nextAutoStart;
+        // A new work run gets its own file: one run, one recording.
+        public void RestartRecording()
+        {
+            if(!autoRecord||IsPlayback)return;
+            StopRecording();userStopped=false;nextAutoStart=0;
+            if(calibration.IsCalibrated&&!paused)StartRecording();
         }
         void LateUpdate()
         {
@@ -162,7 +174,7 @@ namespace FactoryTask
         Quaternion ReadRotation()=>new Quaternion(reader.ReadSingle(),reader.ReadSingle(),reader.ReadSingle(),reader.ReadSingle());
         public bool BeginPlayback(string path)
         {
-            StopRecording();ClosePlayback();autoStarted=true;
+            StopRecording();ClosePlayback();userStopped=true;
             try
             {
                 reader=new BinaryReader(new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite,65536));
@@ -256,7 +268,9 @@ namespace FactoryTask
             if(!movement)RestoreAvatarScale();
         }
         void ClosePlayback(){reader?.Dispose();reader=null;if(bodySource!=null)bodySource.EndReplay();movementPlaybackActive=false;bodyInvalidSeconds=1;if(bodyRetargeter!=null)bodyRetargeter.enabled=true;if(avatar!=null)avatar.enabled=true;}
-        void OnApplicationPause(bool value){paused=value;if(value)StopRecording();else if(autoRecord&&!IsPlayback)autoStarted=false;}
+        void OnApplicationPause(bool value){paused=value;if(value)StopRecording();else nextAutoStart=0;}
+        // Regaining focus also means the app is running again, even if the resume callback was missed.
+        void OnApplicationFocus(bool focused){if(focused&&paused){paused=false;nextAutoStart=0;}}
         void OnDisable(){StopRecording();ClosePlayback();}
         void OnApplicationQuit(){StopRecording();ClosePlayback();}
     }

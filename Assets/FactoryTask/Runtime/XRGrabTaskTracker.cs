@@ -15,8 +15,11 @@ namespace FactoryTask
         // A held part kept this far from the hand (blocked by a table or another part) for longer
         // than breakawaySeconds slips out of the grip. Brief lag from fast hand motion does not.
         public float breakawayDistance = .3f, breakawaySeconds = .25f;
-        // Never-handled parts that fall off the line are cleared once they settle below this height.
-        public float floorHeight = .5f;
+        // A part left anywhere other than the belt, the pickup table or the bin (floor, a cart beside
+        // the bin...) shrinks away once it has lain still there this long.
+        public float strayVanishSeconds = 2f;
+        public ConveyorController conveyor;
+        public Collider pickupTable;
         public ConveyorPart LeftHeld { get; private set; }
         public ConveyorPart RightHeld { get; private set; }
         [SerializeField] int completedLeft,completedRight;
@@ -59,14 +62,14 @@ namespace FactoryTask
             }
             for(int i=0;i<pool.Parts.Length;i++)
             {
-                var part=pool.Parts[i];if(!part.Free)continue;
+                var part=pool.Parts[i];
+                if(part.Vanishing&&!part.Completed){part.TickVanish(dt);continue;}
+                if(!part.Free)continue;
                 if(part.Body.position.y<-.3f){part.Recover(recoveryPoint.position);continue;}
-                if(part.State==PartState.Conveying)
-                {
-                    part.FloorSeconds=part.Body.position.y<floorHeight?part.FloorSeconds+dt:0;
-                    if(part.FloorSeconds>=3)pool.Recycle(part);
-                    continue;
-                }
+                bool settled=part.Body.linearVelocity.sqrMagnitude<.04f;
+                part.FloorSeconds=settled&&!InWorkArea(part)?part.FloorSeconds+dt:0;
+                if(part.FloorSeconds>=strayVanishSeconds){part.BeginVanish();continue;}
+                if(part.State==PartState.Conveying)continue;
                 if(IsInside(part))part.InsideSeconds+=dt;else part.InsideSeconds=0;
                 if(part.InsideSeconds>=.2f)
                 {
@@ -92,6 +95,21 @@ namespace FactoryTask
                 var part=pool.Parts[i];if(!part.gameObject.activeSelf)continue;
                 part.SetSpectatorHidden(part.State==PartState.Held||InBin(part));
             }
+        }
+        // Where a part may rest: on the belt, on the pickup table, or in the bin.
+        bool InWorkArea(ConveyorPart part)
+        {
+            Bounds b=part.Shape.bounds;
+            if(InBin(part))return true;
+            // Over the belt or the table, including parts stacked on other parts there.
+            if(conveyor!=null&&conveyor.driveSurfaces!=null)
+                foreach(var surface in conveyor.driveSurfaces)if(surface!=null&&Above(b,surface.bounds))return true;
+            return pickupTable!=null&&Above(b,pickupTable.bounds);
+        }
+        static bool Above(Bounds part,Bounds surface)
+        {
+            Vector3 c=part.center;
+            return c.x>=surface.min.x&&c.x<=surface.max.x&&c.z>=surface.min.z&&c.z<=surface.max.z&&part.min.y>=surface.max.y-.05f&&part.min.y<=surface.max.y+.6f;
         }
         bool InBin(ConveyorPart part)
         {
