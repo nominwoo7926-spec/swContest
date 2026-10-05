@@ -36,3 +36,16 @@ UpgradeLog.htm
 
 # Generated reports (pulled separately via adb)
 Reports/
+
+# Local tooling, run artifacts and recordings (never published)
+.claude/
+/NOVA_FactoryTask.apk
+*.apk
+Recordings/
+Assets/_Recovery/
+Assets/_Recovery.meta
+Documentation/Avatar/VerifiedSession_*.fvr
+*.fvr
+
+# Third-party animation not redistributed (download from Mixamo, see README)
+Assets/FactoryTask/Avatar/Animations/Worker_Idle.fbx

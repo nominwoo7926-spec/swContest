@@ -34,7 +34,7 @@ Meta Link 개발 연결: https://developers.meta.com/horizon/documentation/unity
 
 헤드셋 없이 먼저 미리 보려면 같은 재생 메뉴에서 `Documentation/Avatar/LatestVerifiedSession.txt`에 적힌 `.fvr` 예제 파일을 여세요. 이 파일은 자동 검증 중 합성 머리·손 입력으로 수행한 작업 기록입니다.
 
-현재 포함한 예제 파일: `Documentation/Avatar/VerifiedSession_20261001_015554_255.fvr`.
+기록 파일(`.fvr`)은 저장소에 포함하지 않습니다. `QuestTaskSetup.PlayTestsBatch`(플레이 검증)를 한 번 실행하면 예제 파일이 `Documentation/Avatar/`에 새로 만들어집니다.
 
 1. `Tools/Install-QuestTask.ps1`로 최신 APK를 설치합니다. 설치할 때 USB와 헤드셋의 USB 디버깅 승인이 필요합니다.
 2. APK를 실행한 뒤에는 PC 케이블을 분리해도 됩니다. 정면을 보고 편하게 2초 서서 보정하면 동작 데이터 기록이 자동 시작됩니다.
