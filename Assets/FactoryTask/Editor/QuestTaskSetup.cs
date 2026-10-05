@@ -138,6 +138,7 @@ public static class QuestTaskSetup
         lineHeight.tableTop=equipment.Find("Pickup_Table").GetComponent<Collider>();
         var session=systems.gameObject.AddComponent<WorkSessionController>();
         session.conveyor=controller;session.spawner=spawner;session.task=task;session.rula=rula;session.line=lineHeight;
+        session.estimator=estimator;session.dataLogger=systems.gameObject.AddComponent<RunDataLogger>();
         session.baselineSpeed=ConveyorController.FixedSpeed;session.baselineInterval=2;session.travelDistance=lineEnd-spawner.spawnPoint.position.x;
         BuildButtonPanel(root,session,tracking);
         BuildPanel(equipment,calibration);

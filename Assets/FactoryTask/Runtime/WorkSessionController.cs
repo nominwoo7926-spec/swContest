@@ -28,6 +28,9 @@ namespace FactoryTask
         public LineHeightAdjuster line;
         public ThirdPersonAvatarDirector director;
         public VRSessionRecorder recorder;
+        public BodyLoadEstimator estimator;
+        // Writes each finished run (per-part loads and a summary row) for baseline/AI comparison.
+        public RunDataLogger dataLogger;
 
         [Header("Run")]
         public int quota = 100;
@@ -68,7 +71,11 @@ namespace FactoryTask
         public float OptimalSpeed { get; private set; }
         public float Spacing => baselineSpeed * baselineInterval;
 
-        sealed class PartLog { public float speedSum, speedTime, rulaSum; public int rulaSamples; }
+        sealed class PartLog
+        {
+            public float speedSum, speedTime, rulaSum, rulaMax; public int rulaSamples, loadSamples;
+            public readonly float[] loadSum = new float[7], loadMax = new float[7];
+        }
         readonly Dictionary<ConveyorPart, PartLog> logs = new Dictionary<ConveyorPart, PartLog>();
         readonly Queue<Vector3> samples = new Queue<Vector3>(); // (v, t, r)
         float startedAt, finishedAt, elbowSum;
@@ -83,6 +90,8 @@ namespace FactoryTask
         // Red: start a run in the selected mode, wiping any run in progress.
         public void StartRun()
         {
+            // A run restarted before reaching its quota is not saved.
+            if (dataLogger != null) { if (State == RunState.Running) dataLogger.DiscardRun(); dataLogger.BeginRun(SelectedMode == Mode.Optimized ? "AI(파랑)" : "기준(초록)"); }
             spawner.ResetRun(); task.ResetRun(); conveyor.StopImmediately();
             if (director != null) director.ResetBin();
             if (line != null) line.SetOffsetImmediate(0);
@@ -107,7 +116,15 @@ namespace FactoryTask
                 if (!logs.TryGetValue(part, out var log) || part.State == PartState.Conveying && log.rulaSamples > 0)
                     logs[part] = log = new PartLog();
                 if (part.State == PartState.Conveying) { log.speedSum += conveyor.CurrentSpeed * dt; log.speedTime += dt; }
-                else if (part.State == PartState.Held && rula != null && rula.IsValid) { log.rulaSum += rula.WorstGrandScore; log.rulaSamples++; }
+                else if (part.State == PartState.Held)
+                {
+                    if (rula != null && rula.IsValid) { log.rulaSum += rula.WorstGrandScore; log.rulaMax = Mathf.Max(log.rulaMax, rula.WorstGrandScore); log.rulaSamples++; }
+                    if (estimator != null)
+                    {
+                        for (int i = 0; i < 7; i++) { float s = estimator.Score(i); log.loadSum[i] += s; log.loadMax[i] = Mathf.Max(log.loadMax[i], s); }
+                        log.loadSamples++;
+                    }
+                }
             }
             // Phase 1: average elbow height of the (tracked, hidden) avatar while the arms are free.
             if (SelectedMode == Mode.Optimized && !HeightCalibrated && avatar != null && task.HeldWeight <= 0)
@@ -125,6 +142,21 @@ namespace FactoryTask
             float v = log != null && log.speedTime > 0 ? log.speedSum / log.speedTime : conveyor.CurrentSpeed;
             float r = log != null && log.rulaSamples > 0 ? log.rulaSum / log.rulaSamples : (rula != null && rula.IsValid ? rula.WorstGrandScore : 0);
             samples.Enqueue(new Vector3(v, part.HoldSeconds, r));
+            if (dataLogger != null)
+            {
+                var record = new RunDataLogger.BoxRecord
+                {
+                    index = Completed, completedAt = Time.time - startedAt, holdSeconds = part.HoldSeconds, beltSpeed = v,
+                    tableHeight = line != null ? line.TableTopHeight : 0, rulaMean = r, rulaMax = log != null ? log.rulaMax : r,
+                    regionMean = new float[7], regionMax = new float[7]
+                };
+                for (int i = 0; i < 7; i++)
+                {
+                    record.regionMean[i] = log != null && log.loadSamples > 0 ? log.loadSum[i] / log.loadSamples : 0;
+                    record.regionMax[i] = log != null ? log.loadMax[i] : 0;
+                }
+                dataLogger.AddBox(record);
+            }
             while (samples.Count > window) samples.Dequeue();
             logs.Remove(part);
 
@@ -140,6 +172,7 @@ namespace FactoryTask
         {
             State = RunState.Finished; finishedAt = Time.time;
             conveyor.TargetSpeed = 0; conveyor.SupplyEnabled = false;
+            if (dataLogger != null) dataLogger.EndRun(Elapsed, deadlineSeconds, line != null ? line.TableTopHeight : 0);
         }
 
         // Phase 1 result: one line-height change, then the height stays for the rest of the run.

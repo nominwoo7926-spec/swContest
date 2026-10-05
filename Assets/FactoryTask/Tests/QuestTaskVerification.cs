@@ -40,6 +40,16 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Check(BodyLoadVisualizer.ColorFor(0).g>BodyLoadVisualizer.ColorFor(0).r&&BodyLoadVisualizer.ColorFor(100).r>BodyLoadVisualizer.ColorFor(100).g,"Color endpoints are green and red");
         var yellow=BodyLoadVisualizer.ColorFor(50);Check(yellow.r>.9f&&yellow.g>.7f&&yellow.b<.2f,"Midpoint is yellow");
         Check(Mathf.Approximately(AvatarLoadHeatmap.MapColor(0),0)&&Mathf.Approximately(AvatarLoadHeatmap.MapColor(30),.5f)&&Mathf.Approximately(AvatarLoadHeatmap.MapColor(60),1)&&Mathf.Approximately(AvatarLoadHeatmap.MapColor(100),1),"Heatmap colour reaches full risk at the fatigue threshold of 60 (raw scores unchanged)");
+        var loggerObject=new GameObject("Logger_Check");var logger=loggerObject.AddComponent<RunDataLogger>();
+        logger.directoryOverride=Path.GetFullPath("Temp/LoadDataCheck");if(Directory.Exists(logger.directoryOverride))Directory.Delete(logger.directoryOverride,true);
+        logger.BeginRun("AI(파랑)");
+        for(int i=1;i<=2;i++)logger.AddBox(new RunDataLogger.BoxRecord{index=i,completedAt=i*2,holdSeconds=1.5f,beltSpeed=.38f,tableHeight=1,rulaMean=3,rulaMax=4,regionMean=new float[7],regionMax=new float[7]});
+        bool saved=logger.EndRun(199,200,1);string[] rows=saved?File.ReadAllLines(logger.LastWrittenFile):new string[0];
+        string[] summaryRows=File.Exists(Path.Combine(logger.directoryOverride,"Runs_Summary.csv"))?File.ReadAllLines(Path.Combine(logger.directoryOverride,"Runs_Summary.csv")):new string[0];
+        Check(saved&&rows.Length==3&&rows[0].Contains("RULA평균")&&summaryRows.Length==2&&summaryRows[1].Contains(",O,"),"A finished run writes one row per part plus a summary row with the deadline result");
+        logger.BeginRun("기준(초록)");logger.AddBox(new RunDataLogger.BoxRecord{regionMean=new float[7],regionMax=new float[7]});logger.DiscardRun();
+        Check(File.ReadAllLines(Path.Combine(logger.directoryOverride,"Runs_Summary.csv")).Length==2,"A restarted, unfinished run is not saved");
+        DestroyImmediate(loggerObject);
         var line=new[]{new Vector3(.3f,0,1.6f),new Vector3(.4f,0,1.8f),new Vector3(.5f,0,2f)};
         WorkSessionController.FitLoadModel(line,0,out float alpha,out float beta);
         Check(Mathf.Abs(alpha-2)<.001f&&Mathf.Abs(beta-1)<.001f,"Regression recovers r = 2 v + 1 from window data");

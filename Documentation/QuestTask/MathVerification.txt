@@ -10,6 +10,8 @@ PASS Load decays gradually rather than clearing on release
 PASS Color endpoints are green and red
 PASS Midpoint is yellow
 PASS Heatmap colour reaches full risk at the fatigue threshold of 60 (raw scores unchanged)
+PASS A finished run writes one row per part plus a summary row with the deadline result
+PASS A restarted, unfinished run is not saved
 PASS Regression recovers r = 2 v + 1 from window data
 PASS Cost minimum trades a little deadline slack for lower expected RULA
 PASS A larger lateness penalty keeps the speed closer to the required speed
