@@ -141,6 +141,7 @@ public static class QuestTaskSetup
         session.estimator=estimator;session.dataLogger=systems.gameObject.AddComponent<RunDataLogger>();
         session.baselineSpeed=ConveyorController.FixedSpeed;session.baselineInterval=2;session.travelDistance=lineEnd-spawner.spawnPoint.position.x;
         BuildButtonPanel(root,session,tracking);
+        BuildConfirmDisplay(root,session,tracking);
         BuildPanel(equipment,calibration);
         AvatarDemoSetup.Attach(root);
         rula.avatar=root.GetComponentInChildren<FullBodyAvatarIK>();
@@ -228,6 +229,41 @@ public static class QuestTaskSetup
         buttons.blueCap=Cap("Blue",0,new Color(.15f,.45f,.95f),out buttons.blue);
         buttons.redCap=Cap("Red",.12f,new Color(.92f,.2f,.18f),out buttons.red);
         foreach(var t in panel.GetComponentsInChildren<Transform>(true))t.gameObject.layer=LocalUILayer;
+    }
+    public const string KoreanFontPath=Root+"/Art/Fonts/NotoSansKR.ttf";
+    static Text Label(string name,Transform parent,string text,Vector2 size,int fontSize)
+    {
+        var label=new GameObject(name,typeof(RectTransform),typeof(Text)).GetComponent<Text>();
+        label.rectTransform.SetParent(parent,false);label.rectTransform.sizeDelta=size;
+        label.font=AssetDatabase.LoadAssetAtPath<Font>(KoreanFontPath);label.fontStyle=FontStyle.Bold;label.fontSize=fontSize;
+        label.alignment=TextAnchor.MiddleCenter;label.color=Color.white;label.raycastTarget=false;label.text=text;
+        return label;
+    }
+    // AI mode, after 20 parts: a prompt on a stand ~1 m behind the worker, facing them, with a
+    // physical YES button. Hidden until needed; LocalUI layer, so never in the spectator view.
+    static void BuildConfirmDisplay(Transform root,WorkSessionController session,XRTrackingProvider tracking)
+    {
+        var display=New("Height_Confirm_Display",root);
+        // Facing the worker: the display's local forward points away from them.
+        display.SetPositionAndRotation(StandingPosition+new Vector3(0,0,-1f),Quaternion.Euler(0,180,0));
+        Box("Display_Stand",display,new Vector3(0,.58f,.04f),new Vector3(.08f,1.16f,.05f),dark);
+        Box("Display_Frame",display,new Vector3(0,1.45f,.025f),new Vector3(1.04f,.58f,.03f),dark);
+        var canvasObject=new GameObject("Prompt",typeof(RectTransform),typeof(Canvas));
+        var canvas=canvasObject.GetComponent<RectTransform>();canvas.SetParent(display,false);
+        canvas.localPosition=new Vector3(0,1.45f,0);canvas.localScale=Vector3.one*.001f;canvas.sizeDelta=new Vector2(1000,540);
+        canvasObject.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
+        Image("Background",canvas,Vector2.zero,canvas.sizeDelta,PanelColor);
+        Label("Question",canvas,"작업대 높이를 체형에 맞게\n최적화하시겠습니까?",new Vector2(940,300),62);
+        var button=New("Yes_Button",display);button.localPosition=new Vector3(0,1.04f,-.03f);
+        var yes=Material("Confirm_Yes",new Color(.15f,.8f,.35f),0);yes.EnableKeyword("_EMISSION");yes.SetColor("_EmissionColor",new Color(.15f,.8f,.35f)*.8f);
+        Box("Cap",button,Vector3.zero,new Vector3(.26f,.11f,.05f),yes);
+        var capText=new GameObject("Yes_Label",typeof(RectTransform),typeof(Canvas)).GetComponent<RectTransform>();
+        capText.SetParent(button,false);capText.localPosition=new Vector3(0,0,-.026f);capText.localScale=Vector3.one*.001f;capText.sizeDelta=new Vector2(260,110);
+        capText.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
+        Label("Yes",capText,"YES",new Vector2(260,110),70);
+        var panel=display.gameObject.AddComponent<HeightConfirmPanel>();panel.session=session;panel.tracking=tracking;panel.yesButton=button;
+        foreach(var t in display.GetComponentsInChildren<Transform>(true))t.gameObject.layer=LocalUILayer;
+        session.confirmPanel=panel;display.gameObject.SetActive(false);
     }
     // Meta's skinned hand mesh on a controller grip pose: palm toward the handle (+X left, -X right),
     // fingers along +Z, thumb up. The palm side comes from the mesh's finger-pad vs fingernail markers.

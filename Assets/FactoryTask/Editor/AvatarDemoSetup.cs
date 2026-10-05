@@ -195,7 +195,7 @@ public static class AvatarDemoSetup
         background.rectTransform.SetParent(rect,false);background.rectTransform.sizeDelta=rect.sizeDelta;background.color=QuestTaskSetup.PanelColor;background.raycastTarget=false;
         var text=new GameObject("Text",typeof(RectTransform),typeof(Text)).GetComponent<Text>();
         text.rectTransform.SetParent(rect,false);text.rectTransform.sizeDelta=rect.sizeDelta-new Vector2(28,0);
-        text.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");text.fontSize=38;text.alignment=TextAnchor.MiddleCenter;text.color=Color.white;text.raycastTarget=false;
+        text.font=AssetDatabase.LoadAssetAtPath<Font>(QuestTaskSetup.KoreanFontPath)??Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");text.fontSize=38;text.alignment=TextAnchor.MiddleCenter;text.color=Color.white;text.raycastTarget=false;
         text.text="벨트 속도  "+ConveyorController.FixedSpeed.ToString("0.00")+" m/s";
         var label=go.AddComponent<BeltSpeedLabel>();label.conveyor=conveyor;label.label=text;
         SetLayer(go,PanelLayer);

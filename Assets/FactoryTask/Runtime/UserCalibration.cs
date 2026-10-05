@@ -21,7 +21,7 @@ namespace FactoryTask
         Vector3 previousHead, previousLeft, previousRight, sum;
         Vector3 anchorHead,anchorLeft,anchorRight,anchorForward;
         float samples;
-        bool hadTracking,resetConsumed,placed;
+        bool hadTracking,resetConsumed,placed,recalibrateWasPressed;
         const float MaxHeightAdjust=.25f;
         void Update() { Tick(Time.unscaledDeltaTime); }
         public void Tick(float dt)
@@ -41,9 +41,20 @@ namespace FactoryTask
                     BaselineHead+=Vector3.up*delta;
                 }
             }
-            if(!tracking.Recalibrate){resetHeld=0;resetConsumed=false;}
-            else if(!resetConsumed&&(task==null||task.HeldWeight==0))resetHeld+=dt;
-            if(resetHeld>=1&&!resetConsumed){ResetCalibration();resetConsumed=true;}
+            // Left Y: a short press teleports the user back to the table (keeping the calibration);
+            // holding it for a second recalibrates from scratch.
+            bool recalibrate=tracking.Recalibrate;
+            if(recalibrate)
+            {
+                if(!resetConsumed&&(task==null||task.HeldWeight==0))resetHeld+=dt;
+                if(resetHeld>=1&&!resetConsumed){ResetCalibration();resetConsumed=true;}
+            }
+            else
+            {
+                if(recalibrateWasPressed&&!resetConsumed&&resetHeld<.6f)Recenter();
+                resetHeld=0;resetConsumed=false;
+            }
+            recalibrateWasPressed=recalibrate;
             if(IsCalibrated)return;
             // Put the user at the table straight away; the steady-pose calibration below refines it.
             if(!placed&&tracking.HeadTracked&&tracking.IsFloorOrigin)
@@ -72,6 +83,16 @@ namespace FactoryTask
             BaselineHead=tracking.origin.TransformPoint(localHead);Forward=standingPoint.forward;Right=standingPoint.right;
             ShoulderHalfWidth=Mathf.Clamp(stature*.115f,.15f,.24f);ShoulderDrop=Mathf.Clamp(stature*.14f,.18f,.29f);IsCalibrated=true;
         }
+        // Teleport: put the user's current head position back on the standing spot, facing the line.
+        // The calibrated baseline height and stature are kept; only its floor position follows.
+        public void Recenter()
+        {
+            if(!tracking.HeadTracked)return;
+            Vector3 localForward=Vector3.ProjectOnPlane(tracking.head.localRotation*Vector3.forward,Vector3.up);
+            if(localForward.sqrMagnitude<.01f)return;
+            Align(tracking.head.localPosition,localForward.normalized);
+            if(IsCalibrated)BaselineHead=new Vector3(standingPoint.position.x,BaselineHead.y,standingPoint.position.z);
+        }
         // Moves the rig so the given tracking-space head position stands on standingPoint, facing its forward.
         void Align(Vector3 localHead,Vector3 localForward)
         {
@@ -84,7 +105,7 @@ namespace FactoryTask
             Vector3 centre=tracking.head.position-Vector3.up*ShoulderDrop-Forward*.045f;
             return centre+Right*(side==HandSide.Left?-ShoulderHalfWidth:ShoulderHalfWidth);
         }
-        public void ResetCalibration(){IsCalibrated=false;steadySeconds=samples=0;sum=Vector3.zero;hadTracking=false;}
+        public void ResetCalibration(){IsCalibrated=false;steadySeconds=samples=0;sum=Vector3.zero;hadTracking=false;placed=false;}
         public void ApplyRecordedCalibration(Vector3 baseline,Vector3 forward)
         {
             IsCalibrated=true;BaselineHead=baseline;Forward=forward.normalized;Right=Vector3.Cross(Vector3.up,Forward).normalized;

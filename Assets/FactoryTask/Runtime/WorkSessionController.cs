@@ -31,6 +31,8 @@ namespace FactoryTask
         public BodyLoadEstimator estimator;
         // Writes each finished run (per-part loads and a summary row) for baseline/AI comparison.
         public RunDataLogger dataLogger;
+        // Asks the worker (behind them) before the one-shot height change; the run waits for YES.
+        public HeightConfirmPanel confirmPanel;
 
         [Header("Run")]
         public int quota = 100;
@@ -60,7 +62,9 @@ namespace FactoryTask
 
         public Mode SelectedMode { get; private set; } = Mode.Baseline;
         public RunState State { get; private set; }
-        public float Elapsed => State == RunState.Waiting ? 0 : (State == RunState.Running ? Time.time : finishedAt) - startedAt;
+        // Run time excluding the wait at the height prompt, which does not count against the deadline.
+        public float Elapsed => State == RunState.Waiting ? 0 : (State == RunState.Running ? Time.time : finishedAt) - startedAt - pausedSeconds - (AwaitingConfirmation ? Time.time - pausedAt : 0);
+        public bool AwaitingConfirmation { get; private set; }
         public int Completed { get; private set; }
         public bool HeightCalibrated { get; private set; }
         public float ElbowHeight { get; private set; }
@@ -78,7 +82,8 @@ namespace FactoryTask
         }
         readonly Dictionary<ConveyorPart, PartLog> logs = new Dictionary<ConveyorPart, PartLog>();
         readonly Queue<Vector3> samples = new Queue<Vector3>(); // (v, t, r)
-        float startedAt, finishedAt, elbowSum;
+        float startedAt, finishedAt, elbowSum, pausedAt, pausedSeconds;
+        bool resumeAfterLift;
         int elbowCount;
 
         void OnEnable() { if (task != null) task.PartCompleted += OnPartCompleted; }
@@ -97,6 +102,8 @@ namespace FactoryTask
             if (line != null) line.SetOffsetImmediate(0);
             logs.Clear(); samples.Clear();
             Completed = 0; HeightCalibrated = false; elbowSum = 0; elbowCount = 0;
+            AwaitingConfirmation = resumeAfterLift = false; pausedSeconds = 0;
+            if (confirmPanel != null) confirmPanel.Hide();
             Alpha = Beta = 0; RequiredSpeed = OptimalSpeed = baselineSpeed;
             spawner.spawnLimit = quota; spawner.forceSpawn = true;
             conveyor.SetSpeedImmediate(baselineSpeed); conveyor.SupplyEnabled = true;
@@ -146,7 +153,7 @@ namespace FactoryTask
             {
                 var record = new RunDataLogger.BoxRecord
                 {
-                    index = Completed, completedAt = Time.time - startedAt, holdSeconds = part.HoldSeconds, beltSpeed = v,
+                    index = Completed, completedAt = Elapsed, holdSeconds = part.HoldSeconds, beltSpeed = v,
                     tableHeight = line != null ? line.TableTopHeight : 0, rulaMean = r, rulaMax = log != null ? log.rulaMax : r,
                     regionMean = new float[7], regionMax = new float[7]
                 };
@@ -162,10 +169,35 @@ namespace FactoryTask
 
             if (SelectedMode == Mode.Optimized)
             {
-                if (!HeightCalibrated && Completed >= calibrationParts) CalibrateHeight();
+                if (!HeightCalibrated && !AwaitingConfirmation && Completed >= calibrationParts) RequestHeightConfirmation();
                 else if (HeightCalibrated) Optimise();
             }
             if (Completed >= quota) Finish();
+        }
+
+        // Phase 1 done: stop the belt completely and show the prompt behind the worker.
+        void RequestHeightConfirmation()
+        {
+            if (confirmPanel == null) { CalibrateHeight(); return; }
+            AwaitingConfirmation = true; pausedAt = Time.time;
+            conveyor.SetSpeedImmediate(0); conveyor.SupplyEnabled = false;
+            confirmPanel.Show();
+        }
+
+        // YES: adjust the line height, then restart the belt once it has reached the new height.
+        public void ConfirmHeightAdjustment()
+        {
+            if (!AwaitingConfirmation) return;
+            CalibrateHeight();
+            resumeAfterLift = true;
+        }
+
+        void Update()
+        {
+            if (!resumeAfterLift || (line != null && line.Moving)) return;
+            resumeAfterLift = false; AwaitingConfirmation = false;
+            pausedSeconds += Time.time - pausedAt;
+            conveyor.TargetSpeed = baselineSpeed; conveyor.SupplyEnabled = true;
         }
 
         void Finish()
