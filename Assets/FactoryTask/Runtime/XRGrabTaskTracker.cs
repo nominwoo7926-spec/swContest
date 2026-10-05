@@ -72,6 +72,24 @@ namespace FactoryTask
                 }
             }
             UpdateBin(dt);
+            UpdateSpectatorVisibility();
+        }
+        // Third-person view: hide real parts that are held or in the bin (the dummy shows its own).
+        // Also called by the session recorder while replaying, when this component is disabled.
+        public void UpdateSpectatorVisibility()
+        {
+            if(pool==null||pool.Parts==null)return;
+            for(int i=0;i<pool.Parts.Length;i++)
+            {
+                var part=pool.Parts[i];if(!part.gameObject.activeSelf)continue;
+                part.SetSpectatorHidden(part.State==PartState.Held||InBin(part));
+            }
+        }
+        bool InBin(ConveyorPart part)
+        {
+            Vector3 half=completionVolume.size*.5f;
+            Vector3 v=completionVolume.transform.InverseTransformPoint(part.Shape.bounds.center)-completionVolume.center;
+            return Mathf.Abs(v.x)<=half.x&&Mathf.Abs(v.y)<=half.y+.2f&&Mathf.Abs(v.z)<=half.z;
         }
         void UpdateBin(float dt)
         {

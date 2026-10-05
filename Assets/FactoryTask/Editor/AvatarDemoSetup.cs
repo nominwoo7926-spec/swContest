@@ -94,13 +94,13 @@ public static class AvatarDemoSetup
         var map=tracking.actions.actionMaps[0];
         if(tracking.actions.FindAction("RecordToggle")==null){map.AddAction("RecordToggle",UnityEngine.InputSystem.InputActionType.Button,"<XRController>{RightHand}/secondaryButton");File.WriteAllText(AssetDatabase.GetAssetPath(tracking.actions),tracking.actions.ToJson());AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(tracking.actions));}
         // Both cameras retain one shared tracking/input system. The observer renders only to its texture.
-        var main=tracking.head.GetComponent<Camera>();main.cullingMask&=~((1<<AvatarLayer)|(1<<PanelLayer));
+        var main=tracking.head.GetComponent<Camera>();main.cullingMask&=~((1<<AvatarLayer)|(1<<PanelLayer)|(1<<FigureLayer));
         var vrPanel=taskRoot.GetComponentInChildren<BodyLoadVisualizer>(true);SetLayer(vrPanel.gameObject,VrLayer);
         foreach(var marker in tracking.leftHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         foreach(var marker in tracking.rightHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         var cameraObject=new GameObject("SpectatorCamera");cameraObject.transform.SetParent(taskRoot,false);
         var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=43;camera.allowHDR=false;camera.allowMSAA=true;
-        camera.cullingMask=~(1<<VrLayer);camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
+        camera.cullingMask=~((1<<VrLayer)|(1<<FigureLayer));camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
         // Fixed observer across the table, facing the worker's front and looking down at about 45 degrees.
         var standing=QuestTaskSetup.StandingPosition;var chest=standing+new Vector3(0,1.1f,0);
@@ -112,7 +112,8 @@ public static class AvatarDemoSetup
         var panel=Object.Instantiate(vrPanel.gameObject,camera.transform);panel.name="Spectator_Load_Panel";SetLayer(panel,PanelLayer);
         var panelRect=panel.GetComponent<RectTransform>();panelRect.localRotation=Quaternion.identity;panelRect.localScale=Vector3.one*.0009f;
         panel.GetComponent<Canvas>().worldCamera=camera;
-        panelRect.anchoredPosition3D=new Vector3(-.78f,.33f,1.7f);
+        panelRect.anchoredPosition3D=new Vector3(-.95f,.3f,1.7f);
+        BuildBeltSpeedLabel(camera,taskRoot.GetComponentInChildren<ConveyorController>());
         var viewer=cameraObject.AddComponent<SpectatorCameraController>();viewer.spectatorCamera=camera;viewer.output=texture;viewer.spectatorPanel=panel;viewer.session=recorder;
         // No observer render is performed on the standalone headset at runtime.
         EditorUtility.SetDirty(tracking.actions);AssetDatabase.SaveAssets();
@@ -124,20 +125,12 @@ public static class AvatarDemoSetup
     {
         var idle=ImportIdleClip();
         if(idle==null){Debug.LogWarning("Spectator dummy skipped: "+IdleClipPath+" is missing.");return;}
-        var dummy=(GameObject)PrefabUtility.InstantiatePrefab(prefab,taskRoot);dummy.name="Spectator_Worker_Dummy";
-        PrefabUtility.UnpackPrefabInstance(dummy,PrefabUnpackMode.Completely,InteractionMode.AutomatedAction);
-        // Remove every tracking driver (IK, Movement retargeting, finger pass); keep skin and heatmap.
-        for(int pass=0;pass<3;pass++)
-            foreach(var behaviour in dummy.GetComponentsInChildren<MonoBehaviour>(true).Reverse())
-                if(behaviour!=null&&!(behaviour is AvatarLoadHeatmap))Object.DestroyImmediate(behaviour);
-        dummy.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
-        foreach(var skin in dummy.GetComponentsInChildren<Renderer>(true))skin.enabled=true;
+        var controller=BuildDirectorController(idle);
+        var dummy=VisualWorker(prefab,taskRoot,"Spectator_Worker_Dummy",tracker.estimator,controller);
         var standing=tracker.calibration.standingPoint;
         // A step closer to the line than the VR user's spot, so both hands reach the table and bin.
         dummy.transform.SetPositionAndRotation(standing.position+standing.forward*.22f,standing.rotation);
         var animator=dummy.GetComponentInChildren<Animator>(true);
-        animator.enabled=true;animator.runtimeAnimatorController=BuildDirectorController(idle);
-        animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;
         // The carried part: the task part's look at the single 5 kg size, without physics.
         var partPrefab=tracker.pool.prefab;
         var carried=(GameObject)PrefabUtility.InstantiatePrefab(partPrefab.gameObject,dummy.transform);
@@ -149,11 +142,63 @@ public static class AvatarDemoSetup
         SetLayer(carried,AvatarLayer);carried.SetActive(false);
         var director=animator.gameObject.AddComponent<ThirdPersonAvatarDirector>();
         director.pickupTable=GameObject.Find("Pickup_Table").GetComponent<Collider>();
-        director.binVolume=tracker.completionVolume;director.spawner=tracker.pool;
-        director.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();
-        director.binRimHeight=GameObject.Find("Completion_Box").GetComponentsInChildren<Renderer>().Max(r=>r.bounds.max.y);
+        director.binVolume=tracker.completionVolume;
+        var binRenderers=GameObject.Find("Completion_Box").GetComponentsInChildren<Renderer>();
+        director.binRimHeight=binRenderers.Max(r=>r.bounds.max.y);
+        director.binFloorHeight=binRenderers.First(r=>r.name=="Box_Base").bounds.max.y;
         director.visualPart=carried;director.partSize=size;
         var bridge=dummy.AddComponent<GrabToDirectorBridge>();bridge.task=tracker;bridge.director=director;
+        BuildLoadFigure(prefab,taskRoot,tracker,controller);
+    }
+    // A copy of the worker with every tracking driver removed (IK, Movement retargeting, finger
+    // pass), keeping the skin, the load heatmap and a humanoid Animator playing the idle clip.
+    static GameObject VisualWorker(GameObject prefab,Transform parent,string name,BodyLoadEstimator estimator,RuntimeAnimatorController controller)
+    {
+        var worker=(GameObject)PrefabUtility.InstantiatePrefab(prefab,parent);worker.name=name;
+        PrefabUtility.UnpackPrefabInstance(worker,PrefabUnpackMode.Completely,InteractionMode.AutomatedAction);
+        for(int pass=0;pass<3;pass++)
+            foreach(var behaviour in worker.GetComponentsInChildren<MonoBehaviour>(true).Reverse())
+                if(behaviour!=null&&!(behaviour is AvatarLoadHeatmap))Object.DestroyImmediate(behaviour);
+        worker.GetComponent<AvatarLoadHeatmap>().estimator=estimator;
+        foreach(var skin in worker.GetComponentsInChildren<Renderer>(true))skin.enabled=true;
+        var animator=worker.GetComponentInChildren<Animator>(true);
+        animator.enabled=true;animator.runtimeAnimatorController=controller;
+        animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;
+        return worker;
+    }
+    public const int FigureLayer=27;
+    // Load panel figure: the worker seen from the front by its own small camera, coloured by load.
+    static void BuildLoadFigure(GameObject prefab,Transform taskRoot,XRGrabTaskTracker tracker,RuntimeAnimatorController controller)
+    {
+        var origin=new Vector3(0,-30,0);
+        var figure=VisualWorker(prefab,taskRoot,"Load_Panel_Figure",tracker.estimator,controller);
+        figure.transform.SetPositionAndRotation(origin,Quaternion.identity);SetLayer(figure,FigureLayer);
+        string texturePath=Root+"/Generated/Load_Figure.renderTexture";
+        var texture=AssetDatabase.LoadAssetAtPath<RenderTexture>(texturePath);
+        if(texture==null){texture=new RenderTexture(256,432,24,RenderTextureFormat.ARGB32){name="Load_Figure",antiAliasing=4};AssetDatabase.CreateAsset(texture,texturePath);}
+        var cameraObject=new GameObject("Load_Figure_Camera");cameraObject.transform.SetParent(taskRoot,false);
+        cameraObject.transform.SetPositionAndRotation(origin+new Vector3(0,.9f,3),Quaternion.Euler(0,180,0));
+        var camera=cameraObject.AddComponent<Camera>();camera.orthographic=true;camera.orthographicSize=.98f;camera.nearClipPlane=.1f;camera.farClipPlane=10;
+        camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=QuestTaskSetup.PanelColor;camera.cullingMask=1<<FigureLayer;camera.targetTexture=texture;camera.allowHDR=false;
+        var data=camera.GetUniversalAdditionalCameraData();data.allowXRRendering=false;data.renderPostProcessing=false;data.renderShadows=false;
+        cameraObject.AddComponent<LoadFigureCamera>().figureCamera=camera;
+        foreach(var panel in taskRoot.GetComponentsInChildren<BodyLoadVisualizer>(true))panel.figure.texture=texture;
+    }
+    // Belt speed in the top-right corner of the third-person view.
+    static void BuildBeltSpeedLabel(Camera camera,ConveyorController conveyor)
+    {
+        var go=new GameObject("Belt_Speed_Label",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(camera.transform,false);
+        var canvas=go.GetComponent<Canvas>();canvas.renderMode=RenderMode.WorldSpace;canvas.worldCamera=camera;
+        var rect=go.GetComponent<RectTransform>();rect.sizeDelta=new Vector2(430,74);rect.localScale=Vector3.one*.0009f;rect.localRotation=Quaternion.identity;
+        rect.anchoredPosition3D=new Vector3(.78f,.55f,1.7f);
+        var background=new GameObject("Background",typeof(RectTransform),typeof(Image)).GetComponent<Image>();
+        background.rectTransform.SetParent(rect,false);background.rectTransform.sizeDelta=rect.sizeDelta;background.color=QuestTaskSetup.PanelColor;background.raycastTarget=false;
+        var text=new GameObject("Text",typeof(RectTransform),typeof(Text)).GetComponent<Text>();
+        text.rectTransform.SetParent(rect,false);text.rectTransform.sizeDelta=rect.sizeDelta-new Vector2(28,0);
+        text.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");text.fontSize=38;text.alignment=TextAnchor.MiddleCenter;text.color=Color.white;text.raycastTarget=false;
+        text.text="벨트 속도  "+ConveyorController.FixedSpeed.ToString("0.00")+" m/s";
+        var label=go.AddComponent<BeltSpeedLabel>();label.conveyor=conveyor;label.label=text;
+        SetLayer(go,PanelLayer);
     }
     static AnimationClip ImportIdleClip()
     {
@@ -172,21 +217,23 @@ public static class AvatarDemoSetup
         return AssetDatabase.LoadAllAssetsAtPath(IdleClipPath).OfType<AnimationClip>().FirstOrDefault(c=>!c.name.StartsWith("__preview__"));
     }
     // Idle --(Trigger PickAndPlace, no exit time, 0.15 s blend)--> PickAndPlace
-    // PickAndPlace --(exit time at the end of one cycle, short blend)--> Idle. IK pass on.
+    // PickAndPlace --(Bool Performing false, no exit time, 0.25 s blend)--> Idle. IK pass on.
     static UnityEditor.Animations.AnimatorController BuildDirectorController(AnimationClip idle)
     {
         string path=Root+"/Generated/Worker_Director.controller";
         AssetDatabase.DeleteAsset(path);
         var controller=UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(path);
         controller.AddParameter("PickAndPlace",AnimatorControllerParameterType.Trigger);
-        controller.AddParameter(new AnimatorControllerParameter{name="ActionSpeed",type=AnimatorControllerParameterType.Float,defaultFloat=1});
+        controller.AddParameter("Performing",AnimatorControllerParameterType.Bool);
         var layers=controller.layers;layers[0].iKPass=true;controller.layers=layers;
         var machine=controller.layers[0].stateMachine;
         var idleState=machine.AddState("Idle");idleState.motion=idle;machine.defaultState=idleState;
-        var action=machine.AddState("PickAndPlace");action.motion=idle;action.speedParameter="ActionSpeed";action.speedParameterActive=true;
+        var action=machine.AddState("PickAndPlace");action.motion=idle;
         var start=idleState.AddTransition(action);start.AddCondition(UnityEditor.Animations.AnimatorConditionMode.If,0,"PickAndPlace");
         start.hasExitTime=false;start.duration=.15f;start.hasFixedDuration=true;
-        var end=action.AddTransition(idleState);end.hasExitTime=true;end.exitTime=.95f;end.duration=.05f;
+        // The sequence length follows the user's pace, so the director ends the state, not exit time.
+        var end=action.AddTransition(idleState);end.AddCondition(UnityEditor.Animations.AnimatorConditionMode.IfNot,0,"Performing");
+        end.hasExitTime=false;end.duration=.25f;end.hasFixedDuration=true;
         AssetDatabase.SaveAssets();
         return controller;
     }

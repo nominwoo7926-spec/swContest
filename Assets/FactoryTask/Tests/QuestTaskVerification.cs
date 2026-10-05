@@ -181,23 +181,33 @@ public sealed class QuestTaskVerification : MonoBehaviour
         var director=FindFirstObjectByType<ThirdPersonAvatarDirector>();
         if(director!=null&&spectator!=null)
         {
-            until=Time.time+10;while(director.isPerformingAction&&Time.time<until)yield return null;
-            // Real time and end-of-frame captures, so the IK pose matches the carried part exactly.
+            until=Time.time+15;while(director.isPerformingAction&&Time.time<until)yield return null;
+            // Real time, and the animator (with its IK pass) evaluated right before each capture,
+            // so the captured pose matches the carried part exactly.
             float previousScale=Time.timeScale;Time.timeScale=1;
-            director.TriggerPickAndPlaceSequence();
-            Pass(director.isPerformingAction,"Spectator dummy starts a pick-and-place sequence");
-            director.TriggerPickAndPlaceSequence();
-            // Capture the dummy at reach, lift, over the bin, lowering in and returning.
-            foreach(var (phase,label) in new[]{(.2f,"Reach"),(.36f,"Lift"),(.55f,"OverBin"),(.74f,"Place"),(.92f,"Return")})
+            var dummyAnimator=director.GetComponent<Animator>();
+            for(int cycle=0;cycle<3;cycle++)
             {
-                while(director.isPerformingAction&&director.Progress<phase)yield return null;
-                // Evaluate the animator (and its IK pass) now, so the pose matches this frame's part position.
-                director.GetComponent<Animator>().Update(0);
-                CaptureSpectator("Dummy_"+label+"_"+director.Progress.ToString("F2"));
+                director.TriggerPickAndPlaceSequence();
+                if(cycle==0)Pass(director.isPerformingAction,"Spectator dummy starts when a part is picked up");
+                until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Carry&&Time.time<until)yield return null;
+                if(cycle==0){yield return new WaitForSeconds(.35f);dummyAnimator.Update(0);CaptureSpectator("Dummy_1_Carry");}
+                until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Hold&&Time.time<until)yield return null;
+                if(cycle==0)
+                {
+                    yield return new WaitForSeconds(1);dummyAnimator.Update(0);CaptureSpectator("Dummy_2_Hold");
+                    Pass(director.CurrentStage==ThirdPersonAvatarDirector.Stage.Hold,"Dummy holds its part above the bin until the real part is released");
+                }
+                director.NotifyRelease();
+                until=Time.time+10;while(director.CurrentStage!=ThirdPersonAvatarDirector.Stage.Return&&Time.time<until)yield return null;
+                if(cycle==0){dummyAnimator.Update(0);CaptureSpectator("Dummy_3_Released");}
+                until=Time.time+10;while(director.isPerformingAction&&Time.time<until)yield return null;
             }
-            until=Time.time+10;while(director.isPerformingAction&&Time.time<until)yield return null;
+            yield return new WaitForSeconds(1);dummyAnimator.Update(0);CaptureSpectator("Dummy_4_Bin");
             Time.timeScale=previousScale;
             Pass(!director.isPerformingAction,"Dummy sequence finishes and returns to idle");
+            Pass(director.ShownInBin>=1&&director.ShownInBin<=2,"Third-person bin shows at most two placed parts ("+director.ShownInBin+")");
+            Pass(FindFirstObjectByType<BodyLoadVisualizer>().figure.texture!=null,"Load panel shows the worker figure");
         }
         yield return new WaitForSeconds(4);
         Pass(task.BinnedCount==2&&task.pool.Parts.All(p=>!p.gameObject.activeSelf||p.weightKg==5),"Both completed parts rest in the bin; every part is the single 5 kg size");

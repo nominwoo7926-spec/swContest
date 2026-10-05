@@ -1,37 +1,43 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
 namespace FactoryTask
 {
     // Spectator-only "visual dummy" worker. The tracked avatar keeps driving RULA and the load
-    // estimate in the background (hidden); this one plays a clean, two-handed standing
-    // pick-and-place every time the VR user picks up a part.
+    // estimate in the background (hidden); this one performs a clean, two-handed standing
+    // pick-and-place that follows the VR user's own pace:
+    //   real grab    -> reach to the table, pick a part, carry it above the bin
+    //   still held   -> hold it above the bin
+    //   real release -> lower it to the rim and let it drop into the near row of the bin
+    // Grabs that arrive mid-sequence are queued, so every real carry is mirrored once.
     //
-    // Animator: Idle --(Trigger PickAndPlace)--> PickAndPlace --(exit time)--> Idle. Both states play
-    // the standing idle clip; the reach, lift, turn and place come from humanoid IK aimed at the real
-    // pickup table and bin, so a raised or lowered table is followed automatically.
-    // One sequence lasts one part-arrival interval, which stretches when the belt slows down.
+    // Animator: Idle --(Trigger PickAndPlace)--> PickAndPlace --(Bool Performing false)--> Idle.
+    // Both states play the standing idle clip; reach, lift, turn and place are humanoid IK aimed at
+    // the real table and bin, so a raised or lowered table is followed automatically.
     [RequireComponent(typeof(Animator))]
     public sealed class ThirdPersonAvatarDirector : MonoBehaviour
     {
+        public enum Stage { Idle, Reach, Carry, Hold, Lower, Return }
         static readonly int PickAndPlaceTrigger = Animator.StringToHash("PickAndPlace");
-        static readonly int ActionSpeed = Animator.StringToHash("ActionSpeed");
+        static readonly int Performing = Animator.StringToHash("Performing");
 
         [Header("Scene")]
         public Collider pickupTable;
         public BoxCollider binVolume;
-        [Tooltip("Top of the bin walls; the part is carried over it, then lowered straight in.")]
+        [Tooltip("Top of the bin walls; parts are released just above it, never lowered past it.")]
         public float binRimHeight = 1.125f;
-        public PartSpawner spawner;
-        public ConveyorController conveyor;
-        [Tooltip("Carried part shown between the dummy's hands (no physics).")]
+        [Tooltip("Top of the bin floor that dropped parts come to rest on.")]
+        public float binFloorHeight = .81f;
+        [Tooltip("Carried part shown between the dummy's hands (no physics); also the template for parts left in the bin.")]
         public GameObject visualPart;
         public float partSize = .24f;
+        [Tooltip("Parts shown in the bin in the third-person view; the oldest fades out first.")]
+        public int binShowCount = 2;
 
-        [Header("Sequence (normalized time)")]
-        [Range(0, 1)] public float pickUpAt = .26f;
-        [Range(0, 1)] public float placeAt = .78f;
-        public float minSeconds = 2.5f, maxSeconds = 8f;
+        [Header("Timing at a 3 s work pace (scaled to the user's pace)")]
+        public float reachSeconds = .7f, carrySeconds = 1f, lowerSeconds = .45f, returnSeconds = .6f;
+        public float maxHoldSeconds = 8;
 
         [Header("Pose")]
         public float maxTurnDegrees = 35;
@@ -45,17 +51,25 @@ namespace FactoryTask
         public UnityEvent onPickedUp = new UnityEvent();
         public UnityEvent onPlacedInBin = new UnityEvent();
 
-        public bool isPerformingAction { get; private set; }
-        public float SequenceSeconds { get; private set; }
-        public float Progress => isPerformingAction ? Mathf.Clamp01(elapsed / SequenceSeconds) : 0;
+        public bool isPerformingAction => stage != Stage.Idle;
+        public Stage CurrentStage => stage;
+        public int ShownInBin => shown.Count;
+        // Seconds per real carry, smoothed over the user's recent grabs.
+        public float Pace { get; private set; } = 3;
 
         Animator animator;
-        Transform body;
+        Transform body, binVisuals;
         Quaternion baseRotation;
-        float elapsed, clipLength = 1, handWeight;
-        bool pickedUp, placed;
-        Vector3 pickPoint, liftPoint, overBinPoint, placePoint, partPoint;
+        Stage stage;
+        float stageTime, handWeight, lastGrab = -1, yawFrom, yawTo;
+        bool releaseRequested, pickedUp;
+        int pending, slot;
+        Vector3 pickPoint, liftPoint, overBinPoint, releasePoint, partPoint;
+        Vector3[] slotRest = new Vector3[2];
+        readonly List<Placed> shown = new List<Placed>();
         Transform leftHand, rightHand, leftIndex, rightIndex, leftLittle, rightLittle, leftMiddle, rightMiddle, chest;
+
+        sealed class Placed { public Transform part; public int slot; public float age, fade = -1; public Vector3 from; }
 
         void Awake()
         {
@@ -63,8 +77,6 @@ namespace FactoryTask
             animator.applyRootMotion = false;
             body = transform.parent != null ? transform.parent : transform;
             baseRotation = body.rotation;
-            var clips = animator.runtimeAnimatorController != null ? animator.runtimeAnimatorController.animationClips : null;
-            if (clips != null && clips.Length > 0) clipLength = Mathf.Max(.1f, clips[0].length);
             leftHand = animator.GetBoneTransform(HumanBodyBones.LeftHand); rightHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
             leftIndex = animator.GetBoneTransform(HumanBodyBones.LeftIndexProximal); rightIndex = animator.GetBoneTransform(HumanBodyBones.RightIndexProximal);
             leftLittle = animator.GetBoneTransform(HumanBodyBones.LeftLittleProximal); rightLittle = animator.GetBoneTransform(HumanBodyBones.RightLittleProximal);
@@ -72,29 +84,49 @@ namespace FactoryTask
             chest = animator.GetBoneTransform(HumanBodyBones.UpperChest);
             if (chest == null) chest = animator.GetBoneTransform(HumanBodyBones.Chest);
             if (visualPart != null) visualPart.SetActive(false);
+            binVisuals = new GameObject("Dummy_Bin_Parts").transform;
         }
 
-        // Call when the VR user picks up a part. Ignored while a sequence is still running.
+        // The VR user picked up a part. Starts a sequence, or queues one if a sequence is running.
         public void TriggerPickAndPlaceSequence()
         {
-            if (isPerformingAction || !isActiveAndEnabled) return;
-            isPerformingAction = true; pickedUp = placed = false; elapsed = 0;
-            SequenceSeconds = Mathf.Clamp(ArrivalInterval(), minSeconds, maxSeconds);
+            float now = Time.time;
+            if (lastGrab >= 0) Pace = Mathf.Lerp(Pace, Mathf.Clamp(now - lastGrab, 1.2f, 10f), .4f);
+            lastGrab = now;
+            if (!isActiveAndEnabled) return;
+            if (stage == Stage.Idle) Begin(); else pending = Mathf.Min(pending + 1, 2);
+        }
+
+        // The VR user let go of the part: lower and place as soon as it is above the bin.
+        public void NotifyRelease()
+        {
+            if (stage == Stage.Reach || stage == Stage.Carry || stage == Stage.Hold) releaseRequested = true;
+        }
+
+        void Begin()
+        {
+            stage = Stage.Reach; stageTime = 0; releaseRequested = pickedUp = false;
+            // Make room before this part arrives: the oldest of a full bin starts fading now.
+            int visible = 0; foreach (var p in shown) if (p.fade < 0) visible++;
+            if (visible >= binShowCount) foreach (var p in shown) if (p.fade < 0) { p.fade = 0; break; }
+            slot = FreeSlot();
             ComputeTargets();
-            // The PickAndPlace state lasts exactly one sequence: clip length / speed.
-            animator.SetFloat(ActionSpeed, clipLength / SequenceSeconds);
+            animator.SetBool(Performing, true);
             animator.SetTrigger(PickAndPlaceTrigger);
         }
 
-        // Seconds between parts reaching the table at the current belt speed.
-        float ArrivalInterval()
+        int FreeSlot()
         {
-            if (spawner == null) return 3.5f;
-            float speed = conveyor != null ? Mathf.Max(.05f, conveyor.CurrentSpeed) : ConveyorController.FixedSpeed;
-            return spawner.intervalSeconds * ConveyorController.FixedSpeed / speed;
+            for (int s = 0; s < 2; s++)
+            {
+                bool used = false;
+                foreach (var p in shown) if (p.slot == s && p.fade < 0) used = true;
+                if (!used) return s;
+            }
+            return 0;
         }
 
-        // Pick from the table corner nearest the worker; place in the bin just past its near wall.
+        // Pick from the table corner nearest the worker; place in the bin's near row, two side by side.
         void ComputeTargets()
         {
             float half = partSize * .5f;
@@ -106,12 +138,99 @@ namespace FactoryTask
             if (binVolume != null)
             {
                 Bounds b = binVolume.bounds;
-                // Just past the bin's near wall, where the worker can lower it in with straight arms.
-                placePoint = new Vector3(b.center.x, b.min.y + half + .03f, b.min.z + half + .04f);
+                float z = b.min.z + half + .01f, x = half + .012f;
+                slotRest[0] = new Vector3(b.center.x - x, binFloorHeight + half, z);
+                slotRest[1] = new Vector3(b.center.x + x, binFloorHeight + half, z);
             }
-            float clear = Mathf.Max(binRimHeight, pickPoint.y + half) + half + .04f;
+            Vector3 target = slotRest[slot];
+            // Released with the part's bottom just over the rim, so the forearms never cross the walls.
+            releasePoint = new Vector3(target.x, binRimHeight + half + .02f, target.z);
+            float clear = Mathf.Max(binRimHeight, pickPoint.y + half) + half + .12f;
             liftPoint = new Vector3(pickPoint.x, clear, pickPoint.z);
-            overBinPoint = new Vector3(placePoint.x, clear, placePoint.z);
+            overBinPoint = new Vector3(target.x, clear, target.z);
+        }
+
+        float Scale => Mathf.Clamp(Pace / 3f, .55f, 1.5f);
+
+        void Update()
+        {
+            float dt = Time.deltaTime;
+            UpdateBinParts(dt);
+            if (stage == Stage.Idle) { Relax(dt); return; }
+            stageTime += dt;
+            float pickYaw = YawTo(pickPoint), placeYaw = YawTo(releasePoint);
+            switch (stage)
+            {
+                case Stage.Reach:
+                {
+                    float u = stageTime / (reachSeconds * Scale);
+                    handWeight = Smooth(u); partPoint = pickPoint; SetYaw(Mathf.Lerp(0, pickYaw, Smooth(u)));
+                    if (u >= 1) { OnPickUpEvent(); Next(Stage.Carry); }
+                    break;
+                }
+                case Stage.Carry:
+                {
+                    float u = stageTime / (carrySeconds * Scale);
+                    handWeight = 1;
+                    // Straight up off the table, then across to above the bin.
+                    partPoint = u < .35f ? Vector3.Lerp(pickPoint, liftPoint, Smooth(u / .35f)) : Vector3.Lerp(liftPoint, overBinPoint, Smooth((u - .35f) / .65f));
+                    SetYaw(Mathf.Lerp(pickYaw, placeYaw, Smooth((u - .2f) / .8f)));
+                    if (u >= 1) Next(Stage.Hold);
+                    break;
+                }
+                case Stage.Hold:
+                    partPoint = overBinPoint; SetYaw(placeYaw);
+                    if (releaseRequested || stageTime > maxHoldSeconds) Next(Stage.Lower);
+                    break;
+                case Stage.Lower:
+                {
+                    float u = stageTime / (lowerSeconds * Scale);
+                    partPoint = Vector3.Lerp(overBinPoint, releasePoint, Smooth(u)); SetYaw(placeYaw);
+                    if (u >= 1) { OnPlaceEvent(); Next(Stage.Return); }
+                    break;
+                }
+                case Stage.Return:
+                {
+                    float u = stageTime / (returnSeconds * Scale);
+                    // Hands come up and away from the bin first, then the body turns back.
+                    handWeight = 1 - Smooth(u / .7f); partPoint = releasePoint + Vector3.up * .08f * Smooth(u);
+                    SetYaw(Mathf.Lerp(placeYaw, 0, Smooth(u)));
+                    if (u >= 1)
+                    {
+                        stage = Stage.Idle; animator.SetBool(Performing, false);
+                        if (pending > 0) { pending--; Begin(); }
+                    }
+                    break;
+                }
+            }
+            partPoint = Reachable(partPoint);
+            if (visualPart != null && visualPart.activeSelf)
+                visualPart.transform.SetPositionAndRotation(partPoint, Quaternion.Euler(0, body.eulerAngles.y, 0));
+        }
+
+        void Next(Stage next) { stage = next; stageTime = 0; }
+        void SetYaw(float yaw) { body.rotation = baseRotation * Quaternion.Euler(0, yaw, 0); }
+
+        void Relax(float dt)
+        {
+            handWeight = Mathf.MoveTowards(handWeight, 0, dt * 2);
+            body.rotation = Quaternion.RotateTowards(body.rotation, baseRotation, 90 * dt);
+        }
+
+        // Parts left in the bin drop the last few centimetres into their slot, then the oldest fades.
+        void UpdateBinParts(float dt)
+        {
+            for (int i = shown.Count - 1; i >= 0; i--)
+            {
+                var p = shown[i]; p.age += dt;
+                float fall = Mathf.Clamp01(p.age / .28f);
+                p.part.position = Vector3.Lerp(p.from, slotRest[p.slot], fall * fall);
+                if (p.fade < 0) continue;
+                p.fade += dt;
+                float k = 1 - Mathf.SmoothStep(0, 1, p.fade / .6f);
+                p.part.localScale = Vector3.one * partSize * k;
+                if (k <= .02f) { Destroy(p.part.gameObject); shown.RemoveAt(i); }
+            }
         }
 
         // Carry the part in front of the chest when the path would take it out of arm's reach.
@@ -126,48 +245,6 @@ namespace FactoryTask
             return from + Vector3.ClampMagnitude(offset, maxReach);
         }
 
-        void Update()
-        {
-            if (!isPerformingAction) { Relax(Time.deltaTime); return; }
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / SequenceSeconds);
-            if (!pickedUp && t >= pickUpAt) OnPickUpEvent();
-            if (!placed && t >= placeAt) OnPlaceEvent();
-            if (t >= 1) { isPerformingAction = false; return; }
-
-            partPoint = Reachable(PartPosition(t));
-            if (visualPart != null && visualPart.activeSelf)
-                visualPart.transform.SetPositionAndRotation(partPoint, Quaternion.Euler(0, body.eulerAngles.y, 0));
-
-            // Face the table to pick, the bin to place, then the line again.
-            float pickYaw = YawTo(pickPoint), placeYaw = YawTo(placePoint);
-            float carry = Phase(t, pickUpAt + .06f, placeAt - .12f);
-            float yaw = t < pickUpAt ? Mathf.Lerp(0, pickYaw, Phase(t, 0, pickUpAt))
-                      : t < placeAt ? Mathf.Lerp(pickYaw, placeYaw, carry)
-                      : Mathf.Lerp(placeYaw, 0, Phase(t, placeAt + .05f, 1));
-            body.rotation = baseRotation * Quaternion.Euler(0, yaw, 0);
-
-            // Reach in, hold firmly while carrying, then ease the hands back out after letting go.
-            handWeight = t < pickUpAt ? Phase(t, .02f, pickUpAt) : t < placeAt ? 1 : 1 - Phase(t, placeAt + .02f, .97f);
-        }
-
-        void Relax(float dt)
-        {
-            handWeight = Mathf.MoveTowards(handWeight, 0, dt * 2);
-            body.rotation = Quaternion.RotateTowards(body.rotation, baseRotation, 90 * dt);
-        }
-
-        // Straight up off the table, across above the bin rim, then straight down into the bin.
-        Vector3 PartPosition(float t)
-        {
-            if (t < pickUpAt) return pickPoint;
-            if (t >= placeAt) return placePoint;
-            float u = (t - pickUpAt) / (placeAt - pickUpAt);
-            if (u < .25f) return Vector3.Lerp(pickPoint, liftPoint, Smooth(u / .25f));
-            if (u < .65f) return Vector3.Lerp(liftPoint, overBinPoint, Smooth((u - .25f) / .4f));
-            return Vector3.Lerp(overBinPoint, placePoint, Smooth((u - .65f) / .35f));
-        }
-
         float YawTo(Vector3 point)
         {
             Vector3 local = Quaternion.Inverse(baseRotation) * (point - body.position);
@@ -176,7 +253,6 @@ namespace FactoryTask
         }
 
         static float Smooth(float x) => Mathf.SmoothStep(0, 1, Mathf.Clamp01(x));
-        static float Phase(float t, float from, float to) => Smooth((t - from) / Mathf.Max(.0001f, to - from));
 
         void OnAnimatorIK(int layerIndex)
         {
@@ -212,7 +288,7 @@ namespace FactoryTask
             animator.SetIKRotation(goal, delta * animator.GetIKRotation(goal));
         }
 
-        // Animation Event hook (also fired by the sequence timer): the part appears in the hands.
+        // Animation Event hook (also fired by the sequence): the part appears in the hands.
         public void OnPickUpEvent()
         {
             if (pickedUp) return;
@@ -221,12 +297,14 @@ namespace FactoryTask
             onPickedUp.Invoke();
         }
 
-        // Animation Event hook (also fired by the sequence timer): the part is released into the bin.
+        // Animation Event hook (also fired by the sequence): the part is released into the bin.
         public void OnPlaceEvent()
         {
-            if (placed) return;
-            placed = true;
-            if (visualPart != null) visualPart.SetActive(false);
+            if (visualPart == null || !visualPart.activeSelf) return;
+            visualPart.SetActive(false);
+            var copy = Instantiate(visualPart, partPoint, Quaternion.Euler(0, baseRotation.eulerAngles.y, 0), binVisuals);
+            copy.name = "Dummy_Bin_Part"; copy.SetActive(true);
+            shown.Add(new Placed { part = copy.transform, slot = slot, from = partPoint });
             onPlacedInBin.Invoke();
         }
     }

@@ -227,6 +227,7 @@ namespace FactoryTask
                 bool continuous=a.state[i]!=0&&b.state[i]!=0&&a.kind[i]==b.kind[i]&&Vector3.Distance(a.pp[i],b.pp[i])<1;
                 pool.Parts[i].ApplyRecordedState((PartState)discrete.state[i],discrete.kind[i],continuous?Vector3.Lerp(a.pp[i],b.pp[i],t):discrete.pp[i],continuous?Quaternion.Slerp(a.pq[i],b.pq[i],t):discrete.pq[i]);
             }
+            task.UpdateSpectatorVisibility();
             if(fileVersion>=2&&bodySource!=null)
             {
                 bool bodyAvailable=a.bodyValid||b.bodyValid;

@@ -33,11 +33,14 @@ PASS A single grip no longer picks up a part
 PASS Both grips on one part carry it together and split its weight between the arms
 PASS A two-handed carry lifts the part between the palms
 PASS Opening either hand releases the part
-PASS Spectator dummy starts a pick-and-place sequence
+PASS Spectator dummy starts when a part is picked up
+PASS Dummy holds its part above the bin until the real part is released
 PASS Dummy sequence finishes and returns to idle
+PASS Third-person bin shows at most two placed parts (2)
+PASS Load panel shows the worker figure
 PASS Both completed parts rest in the bin; every part is the single 5 kg size
 PASS Line keeps supplying parts
-PASS Accumulated parts still do not interpenetrate (max 0.004 m Conveying@(3.79, 1.12, -3.22) / Conveying@(3.58, 1.13, -3.12))
+PASS Accumulated parts still do not interpenetrate (max 0.003 m Conveying@(3.81, 1.12, -2.90) / Conveying@(3.55, 1.13, -2.76))
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS RULA produces a bounded full-body grand score

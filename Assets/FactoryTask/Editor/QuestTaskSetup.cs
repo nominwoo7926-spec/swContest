@@ -128,7 +128,7 @@ public static class QuestTaskSetup
         // Texture property animation cannot use a statically batched belt renderer.
         GameObjectUtility.SetStaticEditorFlags(controller.beltRenderer.gameObject,StaticEditorFlags.ContributeGI|StaticEditorFlags.ReflectionProbeStatic);
         var rula=systems.gameObject.AddComponent<RulaAssessment>();rula.tracking=tracking;rula.calibration=calibration;rula.task=task;
-        BuildPanel(equipment,estimator,task,calibration,controller,rula);
+        BuildPanel(equipment,calibration);
         AvatarDemoSetup.Attach(root);
         rula.avatar=root.GetComponentInChildren<FullBodyAvatarIK>();
         EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.ImportAsset(ScenePath);AssetDatabase.SaveAssets();
@@ -262,93 +262,21 @@ public static class QuestTaskSetup
         var g=new GameObject(name,typeof(RectTransform),typeof(CanvasRenderer),typeof(Image));g.transform.SetParent(parent,false);var rect=(RectTransform)g.transform;rect.anchorMin=rect.anchorMax=new Vector2(.5f,.5f);rect.anchoredPosition=position;rect.sizeDelta=size;
         var image=g.GetComponent<Image>();image.color=color;image.raycastTarget=false;if(sprite!=null)image.sprite=Sprites[sprite];return image;
     }
-    static NumberReadout Number(string name,Transform parent,Vector2 pos,float height=27)
+    static void BuildPanel(Transform worldParent,UserCalibration calibration)
     {
-        var result=new NumberReadout{digits=new Image[3]};for(int i=0;i<3;i++){result.digits[i]=Image(name+"_"+i,parent,pos+new Vector2((i-1)*height*.55f,0),new Vector2(height*.8f,height),Color.white,"Digit0");result.digits[i].enabled=i==2;}return result;
-    }
-    static void BuildPanel(Transform worldParent,BodyLoadEstimator estimator,XRGrabTaskTracker task,UserCalibration calibration,ConveyorController controller,RulaAssessment rula)
-    {
-        // 510×420 패널 — 왼쪽 신체 도식 + 오른쪽 진행 바 차트
+        // 260×440 panel: only the worker figure with load colours (texture assigned by AvatarDemoSetup).
         var go=new GameObject("Relative_Load_Panel",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(worldParent,false);go.transform.position=StandingPosition+new Vector3(.9f,1.48f,.1f);go.transform.rotation=Quaternion.LookRotation(StandingPosition+new Vector3(0,1.48f,0)-go.transform.position,Vector3.up);go.transform.localScale=Vector3.one*.001f;
-        var rect=go.GetComponent<RectTransform>();rect.sizeDelta=new Vector2(510,420);go.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
-        Image("Panel_Background",rect,Vector2.zero,new Vector2(510,420),new Color(.018f,.032f,.055f,.97f));
-
-        // ── 상단 타이틀 + 평균 바 ────────────────────────────────────
-        Image("AvgBar_Bg",rect,new Vector2(162,158),new Vector2(140,18),new Color(.07f,.11f,.18f));
-        var avgBar=Image("AvgBar_Fill",rect,new Vector2(162,158),new Vector2(140,18),BodyLoadVisualizer.ColorFor(0));
-        avgBar.type=UnityEngine.UI.Image.Type.Filled;avgBar.fillMethod=UnityEngine.UI.Image.FillMethod.Horizontal;avgBar.fillAmount=0;
-        Image("Divider",rect,new Vector2(0,132),new Vector2(490,1),new Color(.3f,.45f,.53f));
-
-        // ── 신체 도식 (왼쪽) ─────────────────────────────────────────
-        Image("Left_Label",rect,new Vector2(-130,109),new Vector2(60,24),new Color(.65f,.76f,.82f),"Left");
-        Image("Right_Label",rect,new Vector2(0,109),new Vector2(60,24),new Color(.65f,.76f,.82f),"Right");
-        Image("Head_Schematic",rect,new Vector2(-65,89),new Vector2(37,37),new Color(.62f,.73f,.8f),"Circle");
-        Image("Neck",rect,new Vector2(-65,62),new Vector2(15,21),new Color(.4f,.52f,.62f));
-        Image("Shoulder_Link",rect,new Vector2(-65,45),new Vector2(130,8),new Color(.35f,.46f,.55f));
-        Image("Pelvis",rect,new Vector2(-65,-66),new Vector2(68,20),new Color(.35f,.46f,.55f));
-        foreach(float x in new[]{-85f,-45f})Image("Leg_Schematic",rect,new Vector2(x,-102),new Vector2(15,58),new Color(.24f,.34f,.43f));
-
-        var visual=go.AddComponent<BodyLoadVisualizer>();visual.estimator=estimator;visual.task=task;visual.calibration=calibration;visual.rula=rula;
-        visual.regions=new Image[7];visual.regionNumbers=new NumberReadout[7];visual.regionBars=new Image[7];visual.averageBar=avgBar;
-
-        // 신체 부위 색상 도식 (X축 -65 기준으로 이동)
-        Vector2[] positions={new Vector2(-130,45),new Vector2(0,45),new Vector2(-130,0),new Vector2(0,0),new Vector2(-130,-54),new Vector2(0,-54),new Vector2(-65,-9)};
-        for(int i=0;i<7;i++)
-        {
-            Vector2 size=i==6?new Vector2(60,90):i==2||i==3?new Vector2(16,64):new Vector2(26,26);
-            visual.regions[i]=Image("Body_Region_"+i,rect,positions[i],size,BodyLoadVisualizer.ColorFor(0),i==0||i==1||i==4||i==5?"Circle":null);
-        }
-
-        // ── 세로 구분선 ──────────────────────────────────────────────
-        Image("Chart_Sep",rect,new Vector2(58,5),new Vector2(2,240),new Color(.28f,.42f,.52f,.8f));
-
-        // ── 바 차트 (오른쪽) — 상단:왼팔 / 하단:오른팔 ──────────────
-        // 인덱스: 0=왼어깨,1=오른어깨,2=왼팔,3=오른팔,4=왼손목,5=오른손목,6=몸통
-        // barY[i] → 각 부위의 화면 Y 좌표 (왼쪽 3개 위 / 오른쪽 3개 아래)
-        Image("LGroup_Label",rect,new Vector2(152,118),new Vector2(50,15),new Color(.65f,.76f,.82f),"Left");
-        float[] barY={102f,12f,79f,-11f,56f,-34f,-90f};
-        for(int i=0;i<7;i++)
-        {
-            float y=barY[i];
-            Image("Bar_Bg_"+i,rect,new Vector2(152,y),new Vector2(150,16),new Color(.07f,.11f,.18f));
-            var fill=Image("Bar_Fill_"+i,rect,new Vector2(152,y),new Vector2(150,16),BodyLoadVisualizer.ColorFor(0));
-            fill.type=UnityEngine.UI.Image.Type.Filled;fill.fillMethod=UnityEngine.UI.Image.FillMethod.Horizontal;fill.fillAmount=0;
-            visual.regionBars[i]=fill;
-            visual.regionNumbers[i]=Number("Score_"+i,rect,new Vector2(228,y),18);
-        }
-        // 그룹 구분선 + 오른팔 레이블
-        Image("Group_Sep",rect,new Vector2(152,40),new Vector2(155,1),new Color(.45f,.58f,.65f,.7f));
-        Image("RGroup_Label",rect,new Vector2(152,28),new Vector2(50,15),new Color(.65f,.76f,.82f),"Right");
-        // 67% 위험 기준선 (전체 바 차트 높이에 맞춤)
-        Image("Danger_Line",rect,new Vector2(178,7),new Vector2(2,212),new Color(.97f,.23f,.22f,.5f));
-
-        // ── 하단 푸터 ────────────────────────────────────────────────
-        Image("Footer_Line",rect,new Vector2(0,-118),new Vector2(490,1),new Color(.3f,.45f,.53f));
-        Image("Weight_Label",rect,new Vector2(-175,-143),new Vector2(56,24),new Color(.6f,.73f,.8f),"Weight");
-        visual.weight=Number("Weight",rect,new Vector2(-127,-143),23);
-        Image("Kg",rect,new Vector2(-88,-143),new Vector2(36,24),Color.white,"Kg");
-        Image("Average_Label",rect,new Vector2(-5,-143),new Vector2(56,24),new Color(.6f,.73f,.8f),"Average");
-        visual.average=Number("Average",rect,new Vector2(54,-143),23);
-        visual.rulaIndicator=Image("RULA_Indicator",rect,new Vector2(105,-143),new Vector2(31,31),new Color(.18f,.85f,.48f),"Circle");
-        visual.rulaScore=Number("RULA_Score",rect,new Vector2(105,-143),20);
-        // 벨트 속도 바 (푸터 오른쪽 — 초록=정상, 빨강=감속)
-        Image("BeltBar_Bg",rect,new Vector2(155,-143),new Vector2(110,14),new Color(.07f,.11f,.18f));
-        var beltBar=Image("BeltBar_Fill",rect,new Vector2(155,-143),new Vector2(110,14),BodyLoadVisualizer.ColorFor(0));
-        beltBar.type=UnityEngine.UI.Image.Type.Filled;beltBar.fillMethod=UnityEngine.UI.Image.FillMethod.Horizontal;beltBar.fillAmount=1f;
-        visual.beltSpeedBar=beltBar;
-        visual.beltSpeedPct=Number("BeltSpeed",rect,new Vector2(230,-143),16);
-        visual.conveyor=controller;
-
-        visual.glyphs=new Sprite[10];for(int i=0;i<10;i++)visual.glyphs[i]=Sprites["Digit"+i];
-        visual.calibrationProgress=Image("Calibration_Progress",rect,new Vector2(237,158),new Vector2(13,13),Color.cyan,"Circle");
+        var rect=go.GetComponent<RectTransform>();rect.sizeDelta=PanelSize;go.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
+        Image("Panel_Background",rect,Vector2.zero,PanelSize,PanelColor);
+        var visual=go.AddComponent<BodyLoadVisualizer>();visual.calibration=calibration;
+        var figure=new GameObject("Load_Figure",typeof(RectTransform),typeof(RawImage)).GetComponent<RawImage>();
+        figure.rectTransform.SetParent(rect,false);figure.rectTransform.sizeDelta=PanelSize-new Vector2(20,20);figure.raycastTarget=false;visual.figure=figure;
+        visual.calibrationProgress=Image("Calibration_Progress",rect,new Vector2(PanelSize.x*.5f-22,PanelSize.y*.5f-22),new Vector2(18,18),Color.cyan,"Circle");
         visual.calibrationProgress.type=UnityEngine.UI.Image.Type.Filled;visual.calibrationProgress.fillMethod=UnityEngine.UI.Image.FillMethod.Radial360;visual.calibrationProgress.fillAmount=0;
         string matPath=Root+"/Materials/LoadPanel_Overlay.mat";var overlay=AssetDatabase.LoadAssetAtPath<Material>(matPath);if(overlay==null){overlay=new Material(Shader.Find("FactoryTask/OverlayUI"));AssetDatabase.CreateAsset(overlay,matPath);}overlay.shader=Shader.Find("FactoryTask/OverlayUI");EditorUtility.SetDirty(overlay);foreach(var graphic in go.GetComponentsInChildren<Graphic>())graphic.material=overlay;
     }
-    static void WorldSign(Transform parent,string word,Vector3 pos,float width,float height)
-    {
-        var go=new GameObject(word+"_Sign",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(parent,false);go.transform.localPosition=pos;go.transform.localScale=Vector3.one*.001f;go.GetComponent<Canvas>().renderMode=RenderMode.WorldSpace;
-        var rect=go.GetComponent<RectTransform>();rect.sizeDelta=new Vector2(width*1000,height*1000);Image("Backing",rect,Vector2.zero,rect.sizeDelta,new Color(.035f,.065f,.085f));Image(word,rect,Vector2.zero,rect.sizeDelta,Color.white,word);
-    }
+    public static readonly Vector2 PanelSize=new Vector2(260,440);
+    public static readonly Color PanelColor=new Color(.018f,.032f,.055f,.97f);
     static void ConfigureXR()
     {
         var settings=AssetDatabase.LoadAssetAtPath<XRGeneralSettingsPerBuildTarget>(Root+"/XRGeneralSettings.asset");
