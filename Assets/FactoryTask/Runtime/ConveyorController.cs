@@ -51,8 +51,16 @@ namespace FactoryTask
             // A paused belt still grips its parts so they do not coast on the frictionless surface.
             Drive(CurrentSpeed, dt);
             if (running && SupplyEnabled) spawner.Tick(dt);
-            if (beltRenderer == null) return;
-            offset = Mathf.Repeat(offset - CurrentSpeed * dt * textureST.y / .9f, 1);
+            ScrollTexture(CurrentSpeed, dt);
+        }
+
+        // Session replay: the belt is not simulated, only shown at the recorded speed.
+        public void ScrollBelt(float speed, float dt) { CurrentSpeed = speed; ScrollTexture(speed, dt); }
+
+        void ScrollTexture(float speed, float dt)
+        {
+            if (beltRenderer == null || block == null) return;
+            offset = Mathf.Repeat(offset - speed * dt * textureST.y / .9f, 1);
             textureST.w = offset; block.SetVector(BaseMapST, textureST); beltRenderer.SetPropertyBlock(block);
         }
 

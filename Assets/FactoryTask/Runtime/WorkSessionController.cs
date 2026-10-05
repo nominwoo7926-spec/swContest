@@ -60,13 +60,13 @@ namespace FactoryTask
         [Tooltip("Seconds between speed decisions.")]
         public float controlInterval = 1;
         [Tooltip("Load index (0-100) above which the worker is given recovery time.")]
-        public float loadThreshold = 60;
+        public float loadThreshold = 48;
         [Tooltip("Prior slope of load per m/s of belt speed (faster pace = more load), used by the ridge fit.")]
         public float priorSlope = 60;
         [Tooltip("Ridge strength pulling the fitted slope toward the prior while the data are thin.")]
         public float ridge = .002f;
         [Tooltip("Weights of mean load, load above the threshold, and lateness against the deadline.")]
-        public float w1 = 1, wDanger = 30, w2 = 6;
+        public float w1 = 1, wDanger = 80, w2 = 6;
         [Tooltip("Lateness multipliers for running slower than required (late) or faster (early).")]
         public float latePenalty = 1, earlyPenalty = .15f;
 
@@ -85,7 +85,7 @@ namespace FactoryTask
         public float OptimalSpeed { get; private set; }
         public float LiveLoad { get; private set; }
         public float LivePeak { get; private set; }
-        public string StatusText { get; private set; } = "대기 · 빨강 버튼으로 시작";
+        public string StatusText { get; private set; } = "대기";
         public string ModeLabel => SelectedMode == Mode.Optimized ? "AI 모드" : "기준 모드";
         public float Spacing => baselineSpeed * baselineInterval;
 
@@ -104,7 +104,7 @@ namespace FactoryTask
         void OnDisable() { if (task != null) task.PartCompleted -= OnPartCompleted; }
 
         // Green and blue are exclusive: selecting one deselects the other.
-        public void SelectMode(Mode mode) { SelectedMode = mode; if (State != RunState.Running) StatusText = ModeLabel + " 선택 · 빨강 버튼으로 시작"; }
+        public void SelectMode(Mode mode) { SelectedMode = mode; if (State != RunState.Running) StatusText = ModeLabel + " 선택"; }
 
         // Red: start a run in the selected mode, wiping any run in progress.
         public void StartRun()

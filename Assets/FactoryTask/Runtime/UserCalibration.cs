@@ -79,6 +79,13 @@ namespace FactoryTask
             Vector3 localHead=tracking.origin.InverseTransformPoint(meanHead);
             Vector3 localForward=Vector3.ProjectOnPlane(tracking.head.localRotation*Vector3.forward,Vector3.up).normalized;
             if(localForward.sqrMagnitude<.1f)return;
+            // The standing eye height is the reference for the torso load. Keep the same reference for
+            // the same person across runs and app restarts, so baseline and AI runs are comparable;
+            // a forced recalibration (hold left Y) or a clearly different height starts a new one.
+            float stored=PlayerPrefs.GetFloat(EyeHeightKey,0);
+            if(!forceNewReference&&stored>0&&Mathf.Abs(stored-localHead.y)<SamePersonTolerance)localHead.y=stored;
+            else{PlayerPrefs.SetFloat(EyeHeightKey,localHead.y);PlayerPrefs.Save();}
+            forceNewReference=false;
             Align(localHead,localForward);
             BaselineHead=tracking.origin.TransformPoint(localHead);Forward=standingPoint.forward;Right=standingPoint.right;
             ShoulderHalfWidth=Mathf.Clamp(stature*.115f,.15f,.24f);ShoulderDrop=Mathf.Clamp(stature*.14f,.18f,.29f);IsCalibrated=true;
@@ -105,7 +112,11 @@ namespace FactoryTask
             Vector3 centre=tracking.head.position-Vector3.up*ShoulderDrop-Forward*.045f;
             return centre+Right*(side==HandSide.Left?-ShoulderHalfWidth:ShoulderHalfWidth);
         }
-        public void ResetCalibration(){IsCalibrated=false;steadySeconds=samples=0;sum=Vector3.zero;hadTracking=false;placed=false;}
+        const string EyeHeightKey="NOVA_StandingEyeHeight";
+        const float SamePersonTolerance=.08f;
+        bool forceNewReference;
+        // Hold left Y: a new person (or a new reference) - the stored eye height is replaced.
+        public void ResetCalibration(){forceNewReference=true;IsCalibrated=false;steadySeconds=samples=0;sum=Vector3.zero;hadTracking=false;placed=false;}
         public void ApplyRecordedCalibration(Vector3 baseline,Vector3 forward)
         {
             IsCalibrated=true;BaselineHead=baseline;Forward=forward.normalized;Right=Vector3.Cross(Vector3.up,Forward).normalized;

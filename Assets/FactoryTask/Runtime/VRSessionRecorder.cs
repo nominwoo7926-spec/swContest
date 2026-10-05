@@ -32,7 +32,9 @@ namespace FactoryTask
         // 녹화 중이면 현재 경과 시간, 재생/정지 중이면 파일에서 읽은 Duration 반환
         public float RecordingDuration => IsRecording ? (Time.unscaledTime - started) : Duration;
         public const int Rate = 30;
-        const int Magic = 0x46565232, Version = 3, LegacyVersion = 1, HeaderBytes = 16;
+        const int Magic = 0x46565232, Version = 4, LegacyVersion = 1, HeaderBytes = 16;
+        // Belt speed of the frame being replayed (v4 recordings; 0 for older files).
+        public float PlaybackBeltSpeed { get; private set; }
         const int TransformBytes = 28;
         BinaryWriter writer;
         BinaryReader reader;
@@ -66,7 +68,7 @@ namespace FactoryTask
             public readonly Quaternion[] pq;
             public readonly byte[] state,kind;
             public bool bodyValid;
-            public float lineOffset;
+            public float lineOffset,beltSpeed;
             public readonly NativeTransform[] bodyPose = new NativeTransform[MovementBodyPoseStream.JointCount];
             public readonly NativeTransform[] bodyTPose = new NativeTransform[MovementBodyPoseStream.JointCount];
             public Frame(int count){pp=new Vector3[count];pq=new Quaternion[count];state=new byte[count];kind=new byte[count];}
@@ -166,6 +168,7 @@ namespace FactoryTask
             for(int i=0;i<MovementBodyPoseStream.JointCount;i++)Write(capturePose[i]);
             for(int i=0;i<MovementBodyPoseStream.JointCount;i++)Write(captureTPose[i]);
             writer.Write(line!=null?line.Offset:0f);
+            writer.Write(conveyor!=null?conveyor.CurrentSpeed:0f);
         }
         void Write(NativeTransform t){Write(t.Position);var q=t.Orientation;writer.Write(q.x);writer.Write(q.y);writer.Write(q.z);writer.Write(q.w);}
         void Write(Transform t){Write(t.position);var q=t.rotation;writer.Write(q.x);writer.Write(q.y);writer.Write(q.z);writer.Write(q.w);}
@@ -185,7 +188,7 @@ namespace FactoryTask
                 // Sessions recorded with a smaller pool still replay; the spare parts stay hidden.
                 if(capacity>pool.Parts.Length||capacity<1||capacity>16||rate!=Rate)throw new InvalidDataException("Session pool/version differs from this scene");
                 for(int i=capacity;i<pool.Parts.Length;i++)pool.Parts[i].ApplyRecordedState(PartState.Pooled,0,Vector3.zero,Quaternion.identity);
-                frameBytes=156+capacity*30+(fileVersion>=2?1+MovementBodyPoseStream.JointCount*TransformBytes*2:0)+(fileVersion>=3?4:0);
+                frameBytes=156+capacity*30+(fileVersion>=2?1+MovementBodyPoseStream.JointCount*TransformBytes*2:0)+(fileVersion>=3?4:0)+(fileVersion>=4?4:0);
                 if(reader.BaseStream.Length<HeaderBytes+frameBytes*2)throw new InvalidDataException("Session needs at least two complete frames");
                 long completeFrames=(reader.BaseStream.Length-HeaderBytes)/frameBytes;
                 reader.BaseStream.Position=HeaderBytes+(completeFrames-1)*frameBytes;Duration=reader.ReadSingle();
@@ -211,6 +214,7 @@ namespace FactoryTask
                 for(int i=0;i<MovementBodyPoseStream.JointCount;i++)f.bodyTPose[i]=ReadNativeTransform();
             }
             f.lineOffset=fileVersion>=3?reader.ReadSingle():0;
+            f.beltSpeed=fileVersion>=4?reader.ReadSingle():0;
             return true;
         }
         NativeTransform ReadNativeTransform(){Vector3 p=ReadVector();return new NativeTransform(ReadRotation(),p);}
@@ -245,6 +249,8 @@ namespace FactoryTask
             }
             task.UpdateSpectatorVisibility();
             if(line!=null)line.SetOffsetImmediate(discrete.lineOffset);
+            PlaybackBeltSpeed=Mathf.Lerp(a.beltSpeed,b.beltSpeed,t);
+            if(conveyor!=null)conveyor.ScrollBelt(PlaybackBeltSpeed,Time.unscaledDeltaTime);
             if(fileVersion>=2&&bodySource!=null)
             {
                 bool bodyAvailable=a.bodyValid||b.bodyValid;

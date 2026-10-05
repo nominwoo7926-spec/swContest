@@ -45,7 +45,7 @@ PASS Third-person bin shows at most two placed parts (1)
 PASS Load panel shows the worker figure
 PASS Both completed parts rest in the bin; every part weighs 3 kg
 PASS Line keeps supplying parts
-PASS Accumulated parts still do not interpenetrate (max 0.004 m Dropped@(3.84, 1.17, -3.10) / Conveying@(3.56, 1.13, -2.98))
+PASS Accumulated parts still do not interpenetrate (max 0.002 m Dropped@(3.88, 1.17, -3.01) / Conveying@(3.64, 1.12, -3.16))
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS RULA produces a bounded full-body grand score

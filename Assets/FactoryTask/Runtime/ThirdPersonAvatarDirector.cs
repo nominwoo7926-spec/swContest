@@ -37,7 +37,7 @@ namespace FactoryTask
         [Header("Timing (scaled so one sequence fits the arrival interval)")]
         public float reachSeconds = .7f, carrySeconds = 1f, lowerSeconds = .45f, returnSeconds = .6f;
         [Tooltip("Arrivals waiting beyond this are skipped so the dummy never falls far behind.")]
-        public int maxQueued = 2;
+        public int maxQueued = 4;
 
         [Header("Line height change")]
         public LineHeightAdjuster line;
@@ -176,8 +176,9 @@ namespace FactoryTask
             overBinPoint = new Vector3(target.x, clear, target.z);
         }
 
-        // One whole sequence takes about 90 % of the arrival interval.
-        float Scale => Mathf.Clamp(Pace * .9f / (reachSeconds + carrySeconds + lowerSeconds + returnSeconds), .45f, 1.5f);
+        // One whole sequence takes about 90 % of the arrival interval; with parts waiting it hurries so
+        // every part is still placed instead of being skipped.
+        float Scale => Mathf.Clamp(Pace * .9f / (reachSeconds + carrySeconds + lowerSeconds + returnSeconds) / (1 + arrivals.Count * .35f), .4f, 1.5f);
 
         void Update()
         {
