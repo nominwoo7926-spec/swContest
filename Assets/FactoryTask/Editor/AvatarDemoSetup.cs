@@ -191,15 +191,16 @@ public static class AvatarDemoSetup
     {
         var go=new GameObject("Belt_Speed_Label",typeof(RectTransform),typeof(Canvas));go.transform.SetParent(camera.transform,false);
         var canvas=go.GetComponent<Canvas>();canvas.renderMode=RenderMode.WorldSpace;canvas.worldCamera=camera;
-        var rect=go.GetComponent<RectTransform>();rect.sizeDelta=new Vector2(430,74);rect.localScale=Vector3.one*.0009f;rect.localRotation=Quaternion.identity;
-        rect.anchoredPosition3D=new Vector3(.78f,.55f,1.7f);
+        var rect=go.GetComponent<RectTransform>();rect.sizeDelta=new Vector2(640,160);rect.localScale=Vector3.one*.0009f;rect.localRotation=Quaternion.identity;
+        rect.anchoredPosition3D=new Vector3(.68f,.51f,1.7f);
         var background=new GameObject("Background",typeof(RectTransform),typeof(Image)).GetComponent<Image>();
         background.rectTransform.SetParent(rect,false);background.rectTransform.sizeDelta=rect.sizeDelta;background.color=QuestTaskSetup.PanelColor;background.raycastTarget=false;
         var text=new GameObject("Text",typeof(RectTransform),typeof(Text)).GetComponent<Text>();
         text.rectTransform.SetParent(rect,false);text.rectTransform.sizeDelta=rect.sizeDelta-new Vector2(28,0);
-        text.font=AssetDatabase.LoadAssetAtPath<Font>(QuestTaskSetup.KoreanFontPath)??Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");text.fontSize=38;text.alignment=TextAnchor.MiddleCenter;text.color=Color.white;text.raycastTarget=false;
-        text.text="벨트 속도  "+ConveyorController.FixedSpeed.ToString("0.00")+" m/s";
+        text.font=AssetDatabase.LoadAssetAtPath<Font>(QuestTaskSetup.KoreanFontPath)??Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");text.fontSize=34;text.lineSpacing=1.05f;text.alignment=TextAnchor.MiddleCenter;text.color=Color.white;text.raycastTarget=false;
+        text.text="기준 모드\n벨트 속도  "+ConveyorController.FixedSpeed.ToString("0.00")+" m/s\n대기";
         var label=go.AddComponent<BeltSpeedLabel>();label.conveyor=conveyor;label.label=text;
+        label.session=Object.FindFirstObjectByType<WorkSessionController>(FindObjectsInactive.Include);
         SetLayer(go,PanelLayer);
     }
     static AnimationClip ImportIdleClip()

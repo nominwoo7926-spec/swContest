@@ -51,11 +51,18 @@ public sealed class QuestTaskVerification : MonoBehaviour
         Check(File.ReadAllLines(Path.Combine(logger.directoryOverride,"Runs_Summary.csv")).Length==2,"A restarted, unfinished run is not saved");
         DestroyImmediate(loggerObject);
         var line=new[]{new Vector3(.3f,0,1.6f),new Vector3(.4f,0,1.8f),new Vector3(.5f,0,2f)};
-        WorkSessionController.FitLoadModel(line,0,out float alpha,out float beta);
-        Check(Mathf.Abs(alpha-2)<.001f&&Mathf.Abs(beta-1)<.001f,"Regression recovers r = 2 v + 1 from window data");
-        float slower=WorkSessionController.OptimalBeltSpeed(5,.45f,1,6,1,.15f),faster=WorkSessionController.OptimalBeltSpeed(-5,.45f,1,6,1,.15f);
-        Check(slower<.45f&&slower>.3f&&faster>.45f&&Mathf.Approximately(WorkSessionController.OptimalBeltSpeed(0,.45f,1,6,1,.15f),.45f),"Cost minimum trades a little deadline slack for lower expected RULA");
-        Check(WorkSessionController.OptimalBeltSpeed(5,.45f,1,6,10,.15f)>slower,"A larger lateness penalty keeps the speed closer to the required speed");
+        WorkSessionController.FitLoadModel(line,0,0,out float alpha,out float beta);
+        Check(Mathf.Abs(alpha-2)<.001f&&Mathf.Abs(beta-1)<.001f,"Regression recovers L = 2 v + 1 from window data");
+        var flat=new[]{new Vector3(.38f,0,40),new Vector3(.38f,0,42),new Vector3(.38f,0,41)};
+        WorkSessionController.FitLoadModel(flat,.002f,60,out float priorAlpha,out _);
+        Check(Mathf.Abs(priorAlpha-60)<.01f,"With no speed variation the slope falls back to the prior (faster pace = more load)");
+        float calm=WorkSessionController.ChooseSpeed(60,40-60*.38f,5,.38f,60,1,30,6,1,.15f,.26f,.55f);
+        float loaded=WorkSessionController.ChooseSpeed(60,72-60*.38f,5,.38f,60,1,30,6,1,.15f,.26f,.55f);
+        Check(Mathf.Abs(calm-.38f)<.02f&&loaded<calm-.04f,"Below the 60 threshold the belt keeps the required speed; above it the belt slows for recovery");
+        Check(WorkSessionController.ChooseSpeed(60,72-60*.38f,5,.38f,60,1,30,6,10,.15f,.26f,.55f)>loaded,"A larger lateness penalty (deadline near) keeps the speed closer to the required speed");
+        var samples=new List<RunDataLogger.TimelineSample>{new RunDataLogger.TimelineSample{time=0,load=40,peakLoad=50},new RunDataLogger.TimelineSample{time=1,load=70,peakLoad=80},new RunDataLogger.TimelineSample{time=2,load=99,peakLoad=99,paused=true}};
+        var metrics=RunDataLogger.Compute(samples,60);
+        Check(Mathf.Abs(metrics.meanLoad-55)<.01f&&Mathf.Approximately(metrics.peakLoad,80)&&Mathf.Abs(metrics.highLoadShare-50)<.01f,"Timeline metrics: time-weighted mean, peak and share above 60, excluding the paused wait");
         Check(RulaAssessment.Combine(1,1)==1&&RulaAssessment.Combine(8,7)==7,"RULA Table C endpoints match the published worksheet");
         Check(RulaAssessment.LookupA(1,1,1,1)==1&&RulaAssessment.LookupB(1,1,1)==1,"RULA posture tables accept neutral posture");
         input.holding=false;Check(BodyLoadEstimator.Evaluate(input)==Vector3.zero,"Inactive hand has no new loaded target");
@@ -241,7 +248,7 @@ public sealed class QuestTaskVerification : MonoBehaviour
             Pass(FindFirstObjectByType<BodyLoadVisualizer>().figure.texture!=null,"Load panel shows the worker figure");
         }
         yield return new WaitForSeconds(4);
-        Pass(task.BinnedCount==2&&task.pool.Parts.All(p=>!p.gameObject.activeSelf||p.weightKg==5),"Both completed parts rest in the bin; every part is the single 5 kg size");
+        Pass(task.BinnedCount==2&&task.pool.Parts.All(p=>!p.gameObject.activeSelf||p.weightKg==3),"Both completed parts rest in the bin; every part weighs 3 kg");
         Pass(task.pool.Parts.Count(p=>p.State==PartState.Conveying)>3,"Line keeps supplying parts");
         float accumulated=MaxPartPenetration();
         Pass(accumulated<.01f,"Accumulated parts still do not interpenetrate (max "+accumulated.ToString("F3")+" m "+worstPair+")");

@@ -60,11 +60,13 @@ namespace FactoryTask
         public int SpawnIndex { get; set; }
         // The last part of a run's quota, shown in the final-part colour (recorded as kind 3).
         public bool IsFinalPart { get; private set; }
-        public int RecordedKind => IsFinalPart ? 3 : weightKg <= 1 ? 0 : weightKg <= 3 ? 1 : 2;
-        public void Supply(int kind, Vector3 position, Quaternion rotation, Material overrideMaterial = null)
+        // Size variant used at supply (0-2); the weight can differ from the variant's nominal weight.
+        public int Kind { get; private set; }
+        public int RecordedKind => IsFinalPart ? 3 : Kind;
+        public void Supply(int kind, Vector3 position, Quaternion rotation, Material overrideMaterial = null, float weightOverride = 0)
         {
-            Initialize();
-            weightKg = kind == 0 ? 1 : kind == 1 ? 3 : 5;
+            Initialize(); Kind = kind;
+            weightKg = weightOverride > 0 ? weightOverride : kind == 0 ? 1 : kind == 1 ? 3 : 5;
             float size = .17f + kind * .035f;
             transform.localScale = Vector3.one * size;
             position += Vector3.up*(size*.5f+.004f);

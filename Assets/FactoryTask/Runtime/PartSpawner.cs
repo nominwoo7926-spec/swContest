@@ -11,6 +11,8 @@ namespace FactoryTask
         public float intervalSeconds = 2f;
         // Every supplied part uses one variant: 0 = 1 kg / 17 cm, 1 = 3 kg / 20.5 cm, 2 = 5 kg / 24 cm.
         [Range(0, 2)] public int partKind = 2;
+        [Tooltip("Weight of every supplied part (kg). 3 kg carried with both hands is 1.5 kg per arm, under the RULA 2 kg force threshold, so the RULA score follows posture instead of saturating.")]
+        public float partWeightKg = 3;
         [Tooltip("Parts still needed to finish the run (-1 = unlimited), set by the work session from the parts completed and still in play, so lost parts are replaced. The last needed part uses finalPartMaterial.")]
         public int remainingToSupply = -1;
         public Material finalPartMaterial;
@@ -66,7 +68,7 @@ namespace FactoryTask
             var part = TakeFreePart();
             if (part == null) return;
             bool last = remainingToSupply == 1;
-            part.Supply(partKind, position, spawnPoint.rotation, last ? finalPartMaterial : null);
+            part.Supply(partKind, position, spawnPoint.rotation, last ? finalPartMaterial : null, partWeightKg);
             part.SpawnIndex = SpawnedCount;
             SpawnedCount++; countdown = intervalSeconds;
         }
