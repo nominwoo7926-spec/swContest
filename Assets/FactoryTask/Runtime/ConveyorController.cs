@@ -2,32 +2,32 @@ using UnityEngine;
 
 namespace FactoryTask
 {
+    // Physical belt: drives parts on its surface and runs the part supply while a work run is active.
+    // The belt speed is commanded by WorkSessionController (fixed in the baseline mode, optimised in
+    // the AI mode) and eased toward its target so changes are never abrupt.
     public sealed class ConveyorController : MonoBehaviour
     {
         public const float FixedSpeed = .38f;
         public PartSpawner spawner;
         public UserCalibration calibration;
         public XRTrackingProvider tracking;
-        public BodyLoadEstimator estimator;
-        public XRGrabTaskTracker task;
         public Renderer beltRenderer;
         // Frictionless static colliders the belt drives parts across (upper belt, end drum).
         public Collider[] driveSurfaces;
         public Vector3 beltDirection = Vector3.right;
         // Maximum belt grip, like friction: a blocked part slips instead of being forced through.
         public float beltGrip = 5f;
+        [Tooltip("Grip on a part that is stopped by the queue ahead.")]
+        public float stalledGrip = 1.5f;
+        [Tooltip("Time constant (s) of the exponential easing from the current to the target speed.")]
+        public float speedSmoothing = 2f;
 
-        // 최고 부위 부하 ≥50% 가 4초 지속되면 감속 시작, 5초에 걸쳐 45%까지 감소
-        const float LoadThreshold = 50f;
-        const float SlowdownDelay = 4f;
-        const float SlowdownRamp  = 5f;
-        const float MinSpeedRatio = 0.45f;
+        // Set by the work session; 0 keeps the belt stopped.
+        public float TargetSpeed { get; set; }
+        // Whether new parts are supplied (a run is in progress).
+        public bool SupplyEnabled { get; set; }
+        public float CurrentSpeed { get; private set; }
 
-        public float CurrentSpeed { get; private set; } = FixedSpeed;
-        public float SlowdownRatio => 1f - CurrentSpeed / FixedSpeed;
-
-        float highLoadTimer;
-        bool wasSlowing;
         MaterialPropertyBlock block;
         Vector4 textureST;
         float offset;
@@ -45,16 +45,21 @@ namespace FactoryTask
 
         void FixedUpdate()
         {
+            float dt = Time.fixedDeltaTime;
             bool running = calibration.IsCalibrated && tracking.HeadTracked && tracking.Focused;
+            CurrentSpeed = Mathf.Lerp(CurrentSpeed, running ? TargetSpeed : 0, 1 - Mathf.Exp(-dt / Mathf.Max(.01f, speedSmoothing)));
             // A paused belt still grips its parts so they do not coast on the frictionless surface.
-            Drive(running ? CurrentSpeed : 0, Time.fixedDeltaTime);
-            if (!running) return;
-            UpdateSpeed(Time.fixedDeltaTime);
-            spawner.Tick(Time.fixedDeltaTime);
+            Drive(CurrentSpeed, dt);
+            if (running && SupplyEnabled) spawner.Tick(dt);
             if (beltRenderer == null) return;
-            offset = Mathf.Repeat(offset - CurrentSpeed * Time.fixedDeltaTime * textureST.y / .9f, 1);
+            offset = Mathf.Repeat(offset - CurrentSpeed * dt * textureST.y / .9f, 1);
             textureST.w = offset; block.SetVector(BaseMapST, textureST); beltRenderer.SetPropertyBlock(block);
         }
+
+        // Stops the belt at once (used when a run is restarted).
+        public void StopImmediately() { CurrentSpeed = 0; TargetSpeed = 0; SupplyEnabled = false; }
+        // Starts a run already at speed, so the first parts arrive at the run's exact spacing.
+        public void SetSpeedImmediate(float speed) { CurrentSpeed = TargetSpeed = speed; }
 
         void Drive(float speed, float dt)
         {
@@ -64,13 +69,16 @@ namespace FactoryTask
             {
                 var part = spawner.Parts[i];
                 if (!part.Free || part.Body.isKinematic || !OnBelt(part.Shape.bounds)) continue;
-                // Accelerate the contact toward belt velocity, limited like belt friction.
+                // Accelerate the contact toward belt velocity, limited like belt friction. A part that is
+                // held up by the queue ahead gets only a light push (an accumulating conveyor), so a
+                // long backed-up line does not press the front parts into each other.
                 Vector3 slip = along * speed - part.Body.linearVelocity; slip.y = 0;
-                part.Body.AddForce(Vector3.ClampMagnitude(slip / dt, beltGrip), ForceMode.Acceleration);
+                float moving = speed > .01f ? Mathf.Clamp01(Vector3.Dot(part.Body.linearVelocity, along) / speed) : 1;
+                part.Body.AddForce(Vector3.ClampMagnitude(slip / dt, Mathf.Lerp(stalledGrip, beltGrip, moving)), ForceMode.Acceleration);
             }
         }
 
-        bool OnBelt(Bounds part)
+        public bool OnBelt(Bounds part)
         {
             for (int i = 0; i < driveSurfaces.Length; i++)
             {
@@ -82,27 +90,6 @@ namespace FactoryTask
                 if (part.max.x >= belt.min.x && part.min.x <= belt.max.x && c.z >= belt.min.z && c.z <= belt.max.z) return true;
             }
             return false;
-        }
-
-        void UpdateSpeed(float dt)
-        {
-            if (estimator == null) { CurrentSpeed = FixedSpeed; return; }
-
-            // 실제로 들고 있는 동안만 누적 (displayed는 10s 감쇠 지연 → 내려놓아도 Max가 높게 유지됨)
-            bool activeLoad = estimator.Max >= LoadThreshold && task != null && task.HeldWeight > 0;
-            if (activeLoad)
-                highLoadTimer += dt;
-            else
-                highLoadTimer = Mathf.Max(0, highLoadTimer - dt);
-
-            float t = Mathf.Clamp01((highLoadTimer - SlowdownDelay) / SlowdownRamp);
-            bool isSlowing = t > 0;
-            if (isSlowing && !wasSlowing) Debug.Log($"[Belt] 감속 시작 — 최고부하 {estimator.Max:F0}% (타이머 {highLoadTimer:F1}s)");
-            if (!isSlowing && wasSlowing) Debug.Log("[Belt] 정상 속도 복귀");
-            wasSlowing = isSlowing;
-
-            float target = Mathf.Lerp(FixedSpeed, FixedSpeed * MinSpeedRatio, t);
-            CurrentSpeed = Mathf.Lerp(CurrentSpeed, target, 1 - Mathf.Exp(-0.5f * dt));
         }
     }
 }

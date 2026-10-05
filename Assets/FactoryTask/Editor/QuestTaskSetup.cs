@@ -84,7 +84,7 @@ public static class QuestTaskSetup
         float lineEnd=conveyor.GetComponentsInChildren<Renderer>(true).Max(r=>r.bounds.max.x);
         float tableStart=lineEnd+TableGap,tableTop=beltTop-.008f,tableEnd=tableStart+TableLength,tableX=tableStart+TableLength*.5f;
         // ~3 m of belt before the table: a backed-up line reaches the spawn point before the 16-part pool runs out.
-        spawner.prefab=CreatePartPrefab();spawner.poolSize=16;spawner.intervalSeconds=3.5f;spawner.partKind=2;
+        spawner.prefab=CreatePartPrefab();spawner.poolSize=16;spawner.intervalSeconds=2;spawner.partKind=2;spawner.finalPartMaterial=blue;
         spawner.spawnPoint=Point("Part_Spawn",systems,new Vector3(lineEnd-3.2f,beltTop+.002f,beltZ));
         // The table sits a few millimetres below the drum so parts pushed off the belt drop onto it.
         Solid(Box("Pickup_Table",equipment,new Vector3(tableX,tableTop-.025f,beltZ),new Vector3(TableLength,.05f,beltWidth),steel,true),transferFriction);
@@ -123,14 +123,27 @@ public static class QuestTaskSetup
         task.tracking=tracking;task.calibration=calibration;task.pool=spawner;task.estimator=estimator;
         estimator.tracking=tracking;estimator.calibration=calibration;estimator.task=task;
         var report=systems.gameObject.AddComponent<ErgonomicReport>();report.estimator=estimator;report.task=task;report.tracking=tracking;
-        controller.spawner=spawner;controller.calibration=calibration;controller.tracking=tracking;controller.estimator=estimator;controller.task=task;
+        controller.spawner=spawner;controller.calibration=calibration;controller.tracking=tracking;
         controller.beltRenderer=production.GetComponentsInChildren<Renderer>().First(r=>r.name=="Upper_Belt");
         // Texture property animation cannot use a statically batched belt renderer.
         GameObjectUtility.SetStaticEditorFlags(controller.beltRenderer.gameObject,StaticEditorFlags.ContributeGI|StaticEditorFlags.ReflectionProbeStatic);
         var rula=systems.gameObject.AddComponent<RulaAssessment>();rula.tracking=tracking;rula.calibration=calibration;rula.task=task;
+        // The work line rises and falls as one: belt (with drum), table and bin; legs stretch to the floor.
+        var lineHeight=systems.gameObject.AddComponent<LineHeightAdjuster>();
+        var conveyorParts=conveyor.GetComponentsInChildren<Transform>(true);
+        foreach(var t in conveyorParts)GameObjectUtility.SetStaticEditorFlags(t.gameObject,GameObjectUtility.GetStaticEditorFlags(t.gameObject)&~(StaticEditorFlags.BatchingStatic|StaticEditorFlags.OccluderStatic|StaticEditorFlags.OccludeeStatic));
+        lineHeight.moved=new[]{conveyor,surface.transform,spawner.spawnPoint,task.recoveryPoint,done}.Concat(equipment.Cast<Transform>().Where(t=>t.name=="Pickup_Table"||t.name.StartsWith("Table_"))).ToArray();
+        lineHeight.stretched=conveyorParts.Where(t=>t.name=="Leg").Concat(equipment.Cast<Transform>().Where(t=>t.name=="Pickup_Leg")).Concat(done.Cast<Transform>().Where(t=>t.name=="Box_Stand")).ToArray();
+        lineHeight.fixedToFloor=conveyorParts.Where(t=>t.name=="Levelling_Plate"||t.name=="Adjuster").ToArray();
+        lineHeight.tableTop=equipment.Find("Pickup_Table").GetComponent<Collider>();
+        var session=systems.gameObject.AddComponent<WorkSessionController>();
+        session.conveyor=controller;session.spawner=spawner;session.task=task;session.rula=rula;session.line=lineHeight;
+        session.baselineSpeed=ConveyorController.FixedSpeed;session.baselineInterval=2;session.travelDistance=lineEnd-spawner.spawnPoint.position.x;
+        BuildButtonPanel(root,session,tracking);
         BuildPanel(equipment,calibration);
         AvatarDemoSetup.Attach(root);
         rula.avatar=root.GetComponentInChildren<FullBodyAvatarIK>();
+        session.avatar=rula.avatar;session.director=root.GetComponentInChildren<ThirdPersonAvatarDirector>(true);
         EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.ImportAsset(ScenePath);AssetDatabase.SaveAssets();
         var buildScene=new EditorBuildSettingsScene(ScenePath,true){guid=new GUID(AssetDatabase.AssetPathToGUID(ScenePath))};EditorBuildSettings.scenes=new[]{buildScene};
         Selection.activeGameObject=root.gameObject;
@@ -188,6 +201,31 @@ public static class QuestTaskSetup
         m.dynamicFriction=friction;m.staticFriction=friction;m.bounciness=0;m.frictionCombine=combine;m.bounceCombine=PhysicsMaterialCombine.Minimum;
         EditorUtility.SetDirty(m);return m;
     }
+    public const int LocalUILayer=26;
+    // Colour-only control buttons on a pedestal at the user's left: green, blue, red. No text.
+    // LocalUI layer: drawn in the headset, excluded from the spectator camera.
+    static void BuildButtonPanel(Transform root,WorkSessionController session,XRTrackingProvider tracking)
+    {
+        var tags=new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+        var layerName=tags.FindProperty("layers").GetArrayElementAtIndex(LocalUILayer);
+        if(layerName.stringValue!="LocalUI"){layerName.stringValue="LocalUI";tags.ApplyModifiedPropertiesWithoutUndo();}
+        var panel=New("Control_Buttons",root);panel.position=StandingPosition+new Vector3(-.62f,0,.02f);
+        Box("Pedestal",panel,new Vector3(0,.46f,0),new Vector3(.1f,.92f,.1f),dark);
+        Box("Button_Plate",panel,new Vector3(0,.935f,0),new Vector3(.38f,.03f,.16f),steel);
+        var buttons=panel.gameObject.AddComponent<ModeButtonPanel>();buttons.session=session;buttons.tracking=tracking;
+        Renderer Cap(string name,float x,Color colour,out Transform button)
+        {
+            button=New(name,panel);button.localPosition=new Vector3(x,.962f,0);
+            var cap=GameObject.CreatePrimitive(PrimitiveType.Cylinder);cap.name="Cap";Object.DestroyImmediate(cap.GetComponent<Collider>());
+            cap.transform.SetParent(button,false);cap.transform.localScale=new Vector3(.08f,.012f,.08f);
+            var material=Material("Button_"+name,colour,0);material.EnableKeyword("_EMISSION");material.SetColor("_EmissionColor",Color.black);
+            var renderer=cap.GetComponent<Renderer>();renderer.sharedMaterial=material;return renderer;
+        }
+        buttons.greenCap=Cap("Green",-.12f,new Color(.15f,.8f,.35f),out buttons.green);
+        buttons.blueCap=Cap("Blue",0,new Color(.15f,.45f,.95f),out buttons.blue);
+        buttons.redCap=Cap("Red",.12f,new Color(.92f,.2f,.18f),out buttons.red);
+        foreach(var t in panel.GetComponentsInChildren<Transform>(true))t.gameObject.layer=LocalUILayer;
+    }
     // Meta's skinned hand mesh on a controller grip pose: palm toward the handle (+X left, -X right),
     // fingers along +Z, thumb up. The palm side comes from the mesh's finger-pad vs fingernail markers.
     static void BuildRealisticHand(Transform controller,bool left,Material skin,XRTrackingProvider tracking,XRGrabTaskTracker task)
@@ -231,7 +269,7 @@ public static class QuestTaskSetup
         var go=New("Task_Part").gameObject;var part=go.AddComponent<ConveyorPart>();var body=go.GetComponent<Rigidbody>();if(body==null)body=go.AddComponent<Rigidbody>();body.isKinematic=true;body.useGravity=false;
         var collider=go.GetComponent<BoxCollider>();if(collider==null)collider=go.AddComponent<BoxCollider>();collider.size=Vector3.one;collider.isTrigger=false;collider.sharedMaterial=partFriction;
         var shell=Box("Machined_Housing",go.transform,Vector3.zero,Vector3.one,blue);if(rounded!=null){shell.GetComponent<MeshFilter>().sharedMesh=rounded;shell.transform.localScale=new Vector3(1/.38f,1/.22f,1/.35f);}
-        part.bodyRenderer=shell.GetComponent<Renderer>();part.weightMaterials=new[]{blue,amber,Material("Part_5kg_Coral",new Color(.8f,.23f,.27f),.25f)};
+        part.bodyRenderer=shell.GetComponent<Renderer>();part.weightMaterials=new[]{blue,amber,Material("Part_5kg_Coral",new Color(.8f,.23f,.27f),.25f),blue};
         Box("Top_Insert",go.transform,new Vector3(0,.51f,0),new Vector3(.55f,.035f,.55f),dark);
         foreach(float x in new[]{-.34f,.34f})foreach(float z in new[]{-.34f,.34f})Box("Fastener",go.transform,new Vector3(x,.51f,z),new Vector3(.085f,.035f,.085f),steel);
         var prefab=PrefabUtility.SaveAsPrefabAsset(go,Root+"/Prefabs/Task_Part.prefab");Object.DestroyImmediate(go);return prefab.GetComponent<ConveyorPart>();

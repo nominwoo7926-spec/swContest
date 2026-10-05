@@ -86,7 +86,7 @@ public static class AvatarDemoSetup
         ik.modelRoot.position=tracker.calibration.standingPoint.position;
         worker.GetComponent<AvatarLoadHeatmap>().estimator=tracker.estimator;
         var recorder=taskRoot.gameObject.AddComponent<VRSessionRecorder>();
-        recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.avatar=ik;recorder.bodySource=bodySource;recorder.bodyRetargeter=bodyRetargeter;
+        recorder.tracking=tracking;recorder.calibration=tracker.calibration;recorder.task=tracker;recorder.estimator=tracker.estimator;recorder.pool=tracker.pool;recorder.conveyor=taskRoot.GetComponentInChildren<ConveyorController>();recorder.avatar=ik;recorder.bodySource=bodySource;recorder.bodyRetargeter=bodyRetargeter;recorder.line=taskRoot.GetComponentInChildren<LineHeightAdjuster>();
         // The tracked avatar keeps solving every frame (RULA, load estimate) but is no longer filmed;
         // the spectator camera shows the animation-driven dummy instead.
         foreach(var skin in worker.GetComponentsInChildren<Renderer>(true))skin.enabled=false;
@@ -100,7 +100,7 @@ public static class AvatarDemoSetup
         foreach(var marker in tracking.rightHand.GetComponentsInChildren<Renderer>())marker.gameObject.layer=VrLayer;
         var cameraObject=new GameObject("SpectatorCamera");cameraObject.transform.SetParent(taskRoot,false);
         var camera=cameraObject.AddComponent<Camera>();camera.nearClipPlane=.05f;camera.farClipPlane=40;camera.fieldOfView=43;camera.allowHDR=false;camera.allowMSAA=true;
-        camera.cullingMask=~((1<<VrLayer)|(1<<FigureLayer));camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
+        camera.cullingMask=~((1<<VrLayer)|(1<<FigureLayer)|(1<<QuestTaskSetup.LocalUILayer));camera.GetUniversalAdditionalCameraData().allowXRRendering=false;
         camera.GetUniversalAdditionalCameraData().renderPostProcessing=false;
         // Fixed observer across the table, facing the worker's front and looking down at about 45 degrees.
         var standing=QuestTaskSetup.StandingPosition;var chest=standing+new Vector3(0,1.1f,0);

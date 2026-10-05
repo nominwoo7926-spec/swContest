@@ -85,7 +85,12 @@ namespace FactoryTask
             if (chest == null) chest = animator.GetBoneTransform(HumanBodyBones.Chest);
             if (visualPart != null) visualPart.SetActive(false);
             binVisuals = new GameObject("Dummy_Bin_Parts").transform;
+            // Rim and floor heights relative to the bin volume, so they follow a raised or lowered line.
+            if (binVolume != null) { rimAboveVolume = binRimHeight - binVolume.bounds.min.y; floorAboveVolume = binFloorHeight - binVolume.bounds.min.y; }
         }
+        float rimAboveVolume, floorAboveVolume;
+        float RimHeight => binVolume != null ? binVolume.bounds.min.y + rimAboveVolume : binRimHeight;
+        float FloorHeight => binVolume != null ? binVolume.bounds.min.y + floorAboveVolume : binFloorHeight;
 
         // The VR user picked up a part. Starts a sequence, or queues one if a sequence is running.
         public void TriggerPickAndPlaceSequence()
@@ -95,6 +100,15 @@ namespace FactoryTask
             lastGrab = now;
             if (!isActiveAndEnabled) return;
             if (stage == Stage.Idle) Begin(); else pending = Mathf.Min(pending + 1, 2);
+        }
+
+        // A new work run: clear the parts shown in the bin and return to idle.
+        public void ResetBin()
+        {
+            foreach (var p in shown) if (p.part != null) Destroy(p.part.gameObject);
+            shown.Clear(); pending = 0;
+            if (visualPart != null) visualPart.SetActive(false);
+            if (stage != Stage.Idle) { stage = Stage.Idle; animator.SetBool(Performing, false); }
         }
 
         // The VR user let go of the part: lower and place as soon as it is above the bin.
@@ -139,13 +153,13 @@ namespace FactoryTask
             {
                 Bounds b = binVolume.bounds;
                 float z = b.min.z + half + .01f, x = half + .012f;
-                slotRest[0] = new Vector3(b.center.x - x, binFloorHeight + half, z);
-                slotRest[1] = new Vector3(b.center.x + x, binFloorHeight + half, z);
+                slotRest[0] = new Vector3(b.center.x - x, FloorHeight + half, z);
+                slotRest[1] = new Vector3(b.center.x + x, FloorHeight + half, z);
             }
             Vector3 target = slotRest[slot];
             // Released with the part's bottom just over the rim, so the forearms never cross the walls.
-            releasePoint = new Vector3(target.x, binRimHeight + half + .02f, target.z);
-            float clear = Mathf.Max(binRimHeight, pickPoint.y + half) + half + .12f;
+            releasePoint = new Vector3(target.x, RimHeight + half + .02f, target.z);
+            float clear = Mathf.Max(RimHeight, pickPoint.y + half) + half + .12f;
             liftPoint = new Vector3(pickPoint.x, clear, pickPoint.z);
             overBinPoint = new Vector3(target.x, clear, target.z);
         }

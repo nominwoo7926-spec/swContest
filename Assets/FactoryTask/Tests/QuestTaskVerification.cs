@@ -39,6 +39,12 @@ public sealed class QuestTaskVerification : MonoBehaviour
         float decay=BodyLoadEstimator.SmoothLoad(70,0,1);Check(decay>0&&decay<70,"Load decays gradually rather than clearing on release");
         Check(BodyLoadVisualizer.ColorFor(0).g>BodyLoadVisualizer.ColorFor(0).r&&BodyLoadVisualizer.ColorFor(100).r>BodyLoadVisualizer.ColorFor(100).g,"Color endpoints are green and red");
         var yellow=BodyLoadVisualizer.ColorFor(50);Check(yellow.r>.9f&&yellow.g>.7f&&yellow.b<.2f,"Midpoint is yellow");
+        var line=new[]{new Vector3(.3f,0,1.6f),new Vector3(.4f,0,1.8f),new Vector3(.5f,0,2f)};
+        WorkSessionController.FitLoadModel(line,0,out float alpha,out float beta);
+        Check(Mathf.Abs(alpha-2)<.001f&&Mathf.Abs(beta-1)<.001f,"Regression recovers r = 2 v + 1 from window data");
+        float slower=WorkSessionController.OptimalBeltSpeed(5,.45f,1,6,1,.15f),faster=WorkSessionController.OptimalBeltSpeed(-5,.45f,1,6,1,.15f);
+        Check(slower<.45f&&slower>.3f&&faster>.45f&&Mathf.Approximately(WorkSessionController.OptimalBeltSpeed(0,.45f,1,6,1,.15f),.45f),"Cost minimum trades a little deadline slack for lower expected RULA");
+        Check(WorkSessionController.OptimalBeltSpeed(5,.45f,1,6,10,.15f)>slower,"A larger lateness penalty keeps the speed closer to the required speed");
         Check(RulaAssessment.Combine(1,1)==1&&RulaAssessment.Combine(8,7)==7,"RULA Table C endpoints match the published worksheet");
         Check(RulaAssessment.LookupA(1,1,1,1)==1&&RulaAssessment.LookupB(1,1,1)==1,"RULA posture tables accept neutral posture");
         input.holding=false;Check(BodyLoadEstimator.Evaluate(input)==Vector3.zero,"Inactive hand has no new loaded target");
@@ -115,7 +121,22 @@ public sealed class QuestTaskVerification : MonoBehaviour
             Pass(Mathf.Abs(avatar.LeftSoleY-calibration.standingPoint.position.y)<.03f&&Mathf.Abs(avatar.RightSoleY-calibration.standingPoint.position.y)<.03f,"Avatar soles are aligned to the calibrated floor");
         }
         Time.timeScale=4;
-        float until=Time.time+50;
+        // Control panel: nothing runs until red; green and blue are exclusive; red restarts cleanly.
+        var session=FindFirstObjectByType<WorkSessionController>();var lineHeight=FindFirstObjectByType<LineHeightAdjuster>();
+        yield return new WaitForSeconds(1);
+        Pass(session.State==WorkSessionController.RunState.Waiting&&task.pool.SpawnedCount==0,"The line waits for the red button");
+        session.SelectMode(WorkSessionController.Mode.Optimized);bool blueSelected=session.SelectedMode==WorkSessionController.Mode.Optimized;
+        session.SelectMode(WorkSessionController.Mode.Baseline);
+        Pass(blueSelected&&session.SelectedMode==WorkSessionController.Mode.Baseline,"Green and blue select one exclusive mode");
+        float tableBefore=lineHeight.TableTopHeight,beltBefore=controller.driveSurfaces[0].bounds.max.y;
+        lineHeight.SetTargetOffset(.1f);float until=Time.time+20;while(lineHeight.Moving&&Time.time<until)yield return null;
+        Pass(Mathf.Abs(lineHeight.TableTopHeight-tableBefore-.1f)<.005f&&Mathf.Abs(controller.driveSurfaces[0].bounds.max.y-beltBefore-.1f)<.005f,"Raising the line moves belt and table together");
+        session.StartRun();yield return new WaitForSeconds(6);
+        Pass(Mathf.Abs(lineHeight.Offset)<.001f&&task.pool.SpawnedCount>=2,"Red starts a run at the default height and supplies parts");
+        session.StartRun();
+        Pass(task.pool.SpawnedCount==0&&task.pool.Parts.All(p=>!p.gameObject.activeSelf)&&task.CompletedTotal==0,"Red during a run clears every part and count and restarts");
+        Pass(task.pool.spawnLimit==100&&task.pool.finalPartMaterial!=null,"Quota is 100 parts and the last one has its own colour");
+        until=Time.time+50;
         while(ArrivedPart()==null&&Time.time<until)yield return null;yield return new WaitForSeconds(1);
         Pass(ArrivedPart()!=null&&!ArrivedPart().Body.isKinematic,"Belt friction pushes dynamic parts off the conveyor end onto the table");
         int supplied=task.pool.SpawnedCount;yield return new WaitForSeconds(4);
@@ -171,8 +192,10 @@ public sealed class QuestTaskVerification : MonoBehaviour
         var pair=ArrivedPart();Vector3 centre=pair.Shape.bounds.center,across=Vector3.right*pair.HalfHeight;
         Pose(centre-across,centre+across,true,false);yield return new WaitForSeconds(.2f);
         Pass(task.LeftHeld==null&&task.RightHeld==null,"A single grip no longer picks up a part");
+        // Parts on a busy table get nudged by the next ones: aim at where this one is now.
+        centre=pair.Shape.bounds.center;Pose(centre-across,centre+across,false,false);yield return null;
         Pose(centre-across,centre+across,true,true);yield return new WaitForSeconds(.2f);
-        Pass(task.CarriedWithBothHands&&task.LeftHeld==pair&&Mathf.Approximately(task.HeldWeight,pair.weightKg)&&Mathf.Approximately(task.HandWeight(HandSide.Left),pair.weightKg*.5f),"Both grips on one part carry it together and split its weight between the arms");
+        Pass(task.CarriedWithBothHands&&task.LeftHeld==pair&&Mathf.Approximately(task.HeldWeight,pair.weightKg)&&Mathf.Approximately(task.HandWeight(HandSide.Left),pair.weightKg*.5f),"Both grips on one part carry it together and split its weight between the arms (held "+(task.LeftHeld!=null?task.LeftHeld.name:"none")+"/"+(task.RightHeld!=null?task.RightHeld.name:"none")+", target "+pair.name+" "+pair.State+", palms "+Vector3.Distance(pair.Shape.ClosestPoint(task.Palm(HandSide.Left)),task.Palm(HandSide.Left)).ToString("F3")+"/"+Vector3.Distance(pair.Shape.ClosestPoint(task.Palm(HandSide.Right)),task.Palm(HandSide.Right)).ToString("F3")+")");
         Pose(centre-across+Vector3.up*.2f,centre+across+Vector3.up*.2f,true,true);yield return new WaitForSeconds(.4f);
         Pass(task.LeftHeld==pair&&pair.Body.position.y>centre.y+.1f,"A two-handed carry lifts the part between the palms");
         Pose(centre-across+Vector3.up*.2f,centre+across+Vector3.up*.2f,true,false);yield return new WaitForSeconds(.2f);

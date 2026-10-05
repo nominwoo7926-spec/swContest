@@ -9,6 +9,9 @@ PASS Torso is bounded 0 to 100
 PASS Load decays gradually rather than clearing on release
 PASS Color endpoints are green and red
 PASS Midpoint is yellow
+PASS Regression recovers r = 2 v + 1 from window data
+PASS Cost minimum trades a little deadline slack for lower expected RULA
+PASS A larger lateness penalty keeps the speed closer to the required speed
 PASS RULA Table C endpoints match the published worksheet
 PASS RULA posture tables accept neutral posture
 PASS Inactive hand has no new loaded target

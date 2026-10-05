@@ -6,6 +6,12 @@ PASS Binary session recording starts after calibration
 PASS Real skinned worker uses a valid Humanoid avatar
 PASS Spectator output is isolated from headset rendering
 PASS Avatar soles are aligned to the calibrated floor
+PASS The line waits for the red button
+PASS Green and blue select one exclusive mode
+PASS Raising the line moves belt and table together
+PASS Red starts a run at the default height and supplies parts
+PASS Red during a run clears every part and count and restarts
+PASS Quota is 100 parts and the last one has its own colour
 PASS Belt friction pushes dynamic parts off the conveyor end onto the table
 PASS Supply continues while parts accumulate
 PASS Parts collide instead of interpenetrating (max 0.000 m)
@@ -30,7 +36,7 @@ PASS Right completion is recorded separately
 PASS Recent repetition history is isolated by hand
 PASS Repetition history expires after 60 seconds
 PASS A single grip no longer picks up a part
-PASS Both grips on one part carry it together and split its weight between the arms
+PASS Both grips on one part carry it together and split its weight between the arms (held Pooled_Part_5/Pooled_Part_5, target Pooled_Part_5 Held, palms 0.031/0.029)
 PASS A two-handed carry lifts the part between the palms
 PASS Opening either hand releases the part
 PASS Spectator dummy starts when a part is picked up
@@ -40,7 +46,7 @@ PASS Third-person bin shows at most two placed parts (2)
 PASS Load panel shows the worker figure
 PASS Both completed parts rest in the bin; every part is the single 5 kg size
 PASS Line keeps supplying parts
-PASS Accumulated parts still do not interpenetrate (max 0.003 m Conveying@(3.81, 1.12, -2.90) / Conveying@(3.55, 1.13, -2.76))
+PASS Accumulated parts still do not interpenetrate (max 0.000 m Conveying@(2.94, 1.13, -3.03) / Conveying@(3.18, 1.13, -3.01))
 PASS Tracked head lowering and forward movement raise torso load in Play mode
 PASS Feet remain planted while the tracked head bends forward
 PASS RULA produces a bounded full-body grand score

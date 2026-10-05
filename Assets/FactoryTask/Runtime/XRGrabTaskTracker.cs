@@ -38,6 +38,14 @@ namespace FactoryTask
         public int binCapacity = 4;
         readonly System.Collections.Generic.List<ConveyorPart> binned=new System.Collections.Generic.List<ConveyorPart>();
         public int BinnedCount => binned.Count;
+        // Raised once for every part counted as placed in the bin.
+        public event System.Action<ConveyorPart> PartCompleted;
+        // A new run: let go of anything held and start the counts from zero.
+        public void ResetRun()
+        {
+            if(LeftHeld!=null)LeftHeld.Release();if(RightHeld!=null&&RightHeld!=LeftHeld)RightHeld.Release();
+            LeftHeld=RightHeld=null;binned.Clear();completedLeft=completedRight=0;replay=false;
+        }
         void FixedUpdate(){Tick(Time.fixedDeltaTime);}
         public void Tick(float dt)
         {
@@ -68,7 +76,7 @@ namespace FactoryTask
                     if(side==HandSide.Left)completedLeft++;else completedRight++;
                     if(part.CarriedWithBothHands){estimator.RecordCompletion(HandSide.Left,Time.time);estimator.RecordCompletion(HandSide.Right,Time.time);}
                     else estimator.RecordCompletion(side,Time.time);
-                    part.MarkCompleted();binned.Add(part);
+                    part.MarkCompleted();binned.Add(part);PartCompleted?.Invoke(part);
                 }
             }
             UpdateBin(dt);

@@ -56,14 +56,21 @@ namespace FactoryTask
             Body.solverIterations = 16; Body.solverVelocityIterations = 4;
             Shape.isTrigger = false;
         }
-        public void Supply(int kind, Vector3 position, Quaternion rotation)
+        // Order in which the part was supplied during the current run (0-based).
+        public int SpawnIndex { get; set; }
+        // The last part of a run's quota, shown in the final-part colour (recorded as kind 3).
+        public bool IsFinalPart { get; private set; }
+        public int RecordedKind => IsFinalPart ? 3 : weightKg <= 1 ? 0 : weightKg <= 3 ? 1 : 2;
+        public void Supply(int kind, Vector3 position, Quaternion rotation, Material overrideMaterial = null)
         {
             Initialize();
             weightKg = kind == 0 ? 1 : kind == 1 ? 3 : 5;
             float size = .17f + kind * .035f;
             transform.localScale = Vector3.one * size;
             position += Vector3.up*(size*.5f+.004f);
-            if (weightMaterials.Length > kind) bodyRenderer.sharedMaterial = weightMaterials[kind];
+            IsFinalPart = overrideMaterial != null;
+            if (overrideMaterial != null) bodyRenderer.sharedMaterial = overrideMaterial;
+            else if (weightMaterials.Length > kind) bodyRenderer.sharedMaterial = weightMaterials[kind];
             transform.SetPositionAndRotation(position, rotation);
             gameObject.SetActive(true);
             Body.position = position; Body.rotation = rotation; Body.mass = weightKg;
@@ -163,9 +170,11 @@ namespace FactoryTask
         public void ApplyRecordedState(PartState state,int kind,Vector3 position,Quaternion rotation)
         {
             Initialize();SetPhysical(false);Body.interpolation=RigidbodyInterpolation.None;
-            weightKg=kind==0?1:kind==1?3:5;
-            transform.localScale=Vector3.one*(.17f+kind*.035f);
-            bodyRenderer.sharedMaterial=weightMaterials[kind];
+            // Kind 3 is the final part of a quota: the 5 kg size in the final-part colour.
+            IsFinalPart=kind==3;int size=Mathf.Min(kind,2);
+            weightKg=size==0?1:size==1?3:5;
+            transform.localScale=Vector3.one*(.17f+size*.035f);
+            bodyRenderer.sharedMaterial=weightMaterials[Mathf.Min(kind,weightMaterials.Length-1)];
             State=state;gameObject.SetActive(state!=PartState.Pooled);SetSpectatorHidden(state==PartState.Held);
             transform.SetPositionAndRotation(position,rotation);Body.position=position;Body.rotation=rotation;
         }
